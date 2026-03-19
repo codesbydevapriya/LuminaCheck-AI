@@ -27,30 +27,27 @@ if page == "🔍 Detect":
     st.title("🔍 LuminaCheck AI")
     st.subheader("Where Light Reveals Truth")
     st.markdown("---")
-
     uploaded_file = st.file_uploader("📤 Upload an Image", type=["jpg", "jpeg", "png"])
-
     if uploaded_file is not None:
         image = Image.open(uploaded_file)
         st.image(image, caption="Uploaded Image", width=400)
         st.success("✅ Image uploaded successfully!")
-        st.markdown("")
-
         if st.button("🚀 Detect Now!"):
             with st.spinner("🤖 AI analyzing your image..."):
                 model = genai.GenerativeModel("gemini-2.5-flash")
                 response = model.generate_content([
                     image,
-                    """You are a forensic image authentication expert.
-Analyze this image and detect if it is AI-generated or real.
-Look for: unnatural skin, perfect symmetry, weird backgrounds, impossible lighting, distorted hands, fake text/numbers, AI artifacts.
-Be very strict and skeptical. Most AI images look real but have subtle flaws.
-Only say REAL if you are 100% sure it is a genuine photograph.
+                    """You are a strict forensic image authentication expert.
+Your job is to detect AI-generated images. Be very strict and skeptical.
+Check for: unnatural skin texture, perfect symmetry, weird hands/fingers, impossible lighting, fake background blur, AI watermarks, overly perfect features.
+Most AI images look real - find the subtle flaws.
+IMPORTANT: Only classify as REAL if you are absolutely 100% certain it is a genuine photograph taken by a camera.
+If there is ANY doubt, classify as AI-GENERATED.
 
-Reply in this exact format:
+Reply ONLY in this format:
 Verdict: [REAL or AI-GENERATED or FAKE]
 Confidence: [0-100%]
-Reason: [3 specific clues]"""
+Reason: [3 specific visual clues you found]"""
                 ])
                 result = response.text
                 st.markdown("---")
@@ -61,7 +58,6 @@ Reason: [3 specific clues]"""
                 else:
                     st.success(f"✅ {result}")
                     verdict = "REAL"
-
                 st.session_state.history.append({
                     "Time": datetime.now().strftime("%H:%M:%S"),
                     "File": uploaded_file.name,
@@ -86,14 +82,12 @@ elif page == "ℹ️ About":
     st.markdown("""
     ## 🔍 What is LuminaCheck AI?
     LuminaCheck AI is a **Final Year BCA Project** that uses **Google Gemini AI** to detect whether an image is REAL, FAKE, or AI-GENERATED.
-
     ## 🛠️ Technologies Used
     - **Python** — Core programming language
     - **Streamlit** — Web application framework
     - **Google Gemini AI** — Image analysis engine
     - **Pillow** — Image processing
     - **Pandas** — Data management
-
     ## 👩‍💻 Developed By
     **Devapriya** — BCA Final Year Student
     """)
