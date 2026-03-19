@@ -6,6 +6,7 @@ import pandas as pd
 from datetime import datetime
 
 genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
+
 st.set_page_config(page_title="LuminaCheck AI", page_icon="🔍", layout="wide")
 
 st.markdown("""
@@ -40,14 +41,23 @@ if page == "🔍 Detect":
                 model = genai.GenerativeModel("gemini-2.5-flash")
                 response = model.generate_content([
                     image,
-                    "Analyze this image. Is it REAL, FAKE, or AI-GENERATED? Give only: Verdict: [REAL/FAKE/AI-GENERATED], Confidence: [0-100%], Reason: [one line]"
+                    """You are a forensic image authentication expert.
+Analyze this image and detect if it is AI-generated or real.
+Look for: unnatural skin, perfect symmetry, weird backgrounds, impossible lighting, distorted hands, fake text/numbers, AI artifacts.
+Be very strict and skeptical. Most AI images look real but have subtle flaws.
+Only say REAL if you are 100% sure it is a genuine photograph.
+
+Reply in this exact format:
+Verdict: [REAL or AI-GENERATED or FAKE]
+Confidence: [0-100%]
+Reason: [3 specific clues]"""
                 ])
                 result = response.text
                 st.markdown("---")
                 st.subheader("🧠 AI Detection Result:")
                 if "FAKE" in result.upper() or "AI-GENERATED" in result.upper():
                     st.error(f"⚠️ {result}")
-                    verdict = "FAKE"
+                    verdict = "FAKE/AI-GENERATED"
                 else:
                     st.success(f"✅ {result}")
                     verdict = "REAL"
@@ -75,10 +85,7 @@ elif page == "ℹ️ About":
     st.markdown("---")
     st.markdown("""
     ## 🔍 What is LuminaCheck AI?
-    LuminaCheck AI is a **Final Year BCA Project** that uses **Google Gemini AI** to detect whether an image is:
-    - ✅ **REAL** — Authentic photograph
-    - ⚠️ **FAKE** — Manipulated or edited image
-    - 🤖 **AI-GENERATED** — Created by AI tools like Midjourney, DALL-E etc.
+    LuminaCheck AI is a **Final Year BCA Project** that uses **Google Gemini AI** to detect whether an image is REAL, FAKE, or AI-GENERATED.
 
     ## 🛠️ Technologies Used
     - **Python** — Core programming language
@@ -89,11 +96,4 @@ elif page == "ℹ️ About":
 
     ## 👩‍💻 Developed By
     **Devapriya** — BCA Final Year Student
-
-    ## 📌 How to Use
-    1. Go to **Detect** page
-    2. Upload any image (JPG, JPEG, PNG)
-    3. Click **Detect Now!**
-    4. View AI analysis result
-    5. Check **History** page for past detections
     """)
