@@ -23,51 +23,96 @@ st.sidebar.write("📌 Upload an image and detect if it is REAL or FAKE using AI
 if "history" not in st.session_state:
     st.session_state.history = []
 
+def analyze_image(model, image, prompt):
+    response = model.generate_content([image, prompt])
+    return response.text
+
 if page == "🔍 Detect":
     st.title("🔍 LuminaCheck AI")
     st.subheader("Where Light Reveals Truth")
     st.markdown("---")
-
     uploaded_file = st.file_uploader("📤 Upload an Image", type=["jpg", "jpeg", "png"])
 
     if uploaded_file is not None:
         image = Image.open(uploaded_file)
         st.image(image, caption="Uploaded Image", width=400)
         st.success("✅ Image uploaded successfully!")
-        st.markdown("")
 
         if st.button("🚀 Detect Now!"):
-            with st.spinner("🤖 AI analyzing your image..."):
-                model = genai.GenerativeModel("gemini-2.5-flash")
-                response = model.generate_content([
-                    image,
-                    """You are a forensic image authentication expert.
-Analyze this image and detect if it is AI-generated or real.
-Look for: unnatural skin, perfect symmetry, weird backgrounds, impossible lighting, distorted hands, fake text/numbers, AI artifacts.
-Be very strict and skeptical. Most AI images look real but have subtle flaws.
-Only say REAL if you are 100% sure it is a genuine photograph.
+            model = genai.GenerativeModel("gemini-2.5-flash")
 
-Reply in this exact format:
+            prompt1 = """You are a strict AI image forensics expert.
+Analyze this image for AI generation signs:
+- Unnatural skin, hair, or texture
+- Perfect symmetry
+- Weird hands or fingers
+- Impossible lighting or shadows
+- Fake background blur
+- Overly perfect features
+- Text or numbers that look wrong
+
+Be very strict. If ANY doubt exists, say AI-GENERATED.
+Only say REAL if 100% sure it is a camera photograph.
+
+Reply ONLY in this format:
 Verdict: [REAL or AI-GENERATED or FAKE]
 Confidence: [0-100%]
-Reason: [3 specific clues]"""
-                ])
-                result = response.text
-                st.markdown("---")
-                st.subheader("🧠 AI Detection Result:")
-                if "FAKE" in result.upper() or "AI-GENERATED" in result.upper():
-                    st.error(f"⚠️ {result}")
-                    verdict = "FAKE/AI-GENERATED"
-                else:
-                    st.success(f"✅ {result}")
-                    verdict = "REAL"
+Reason: [2-3 specific clues]"""
 
-                st.session_state.history.append({
-                    "Time": datetime.now().strftime("%H:%M:%S"),
-                    "File": uploaded_file.name,
-                    "Result": verdict,
-                    "Details": result[:120]
-                })
+            prompt2 = """You are a digital media authentication specialist.
+Your task: determine if this image was taken by a real camera or generated/manipulated by AI.
+
+Look carefully for:
+1. Skin pores and natural imperfections
+2. Natural lighting inconsistencies
+3. Background realism
+4. Object edges and boundaries
+5. Hair strand details
+6. Eye reflections
+
+If the image looks TOO perfect or professional, it may be AI-generated.
+Real photos have natural imperfections.
+
+Reply ONLY in this format:
+Verdict: [REAL or AI-GENERATED or FAKE]
+Confidence: [0-100%]
+Reason: [2-3 specific clues]"""
+
+            with st.spinner("🔍 First analysis..."):
+                result1 = analyze_image(model, image, prompt1)
+
+            with st.spinner("🔎 Second analysis..."):
+                result2 = analyze_image(model, image, prompt2)
+
+            st.markdown("---")
+            st.subheader("🧠 AI Detection Result:")
+
+            fake1 = "FAKE" in result1.upper() or "AI-GENERATED" in result1.upper()
+            fake2 = "FAKE" in result2.upper() or "AI-GENERATED" in result2.upper()
+
+            if fake1 and fake2:
+                verdict = "AI-GENERATED / FAKE"
+                st.error(f"⚠️ **Both analyses agree: {verdict}**")
+                st.error(f"Analysis 1: {result1}")
+                st.error(f"Analysis 2: {result2}")
+            elif not fake1 and not fake2:
+                verdict = "REAL"
+                st.success(f"✅ **Both analyses agree: REAL**")
+                st.success(f"Analysis 1: {result1}")
+                st.success(f"Analysis 2: {result2}")
+            else:
+                verdict = "UNCERTAIN"
+                st.warning(f"⚠️ **Analyses disagree — UNCERTAIN**")
+                st.warning(f"Analysis 1: {result1}")
+                st.warning(f"Analysis 2: {result2}")
+                st.info("💡 This image has mixed signals — could be heavily edited or partially AI-generated.")
+
+            st.session_state.history.append({
+                "Time": datetime.now().strftime("%H:%M:%S"),
+                "File": uploaded_file.name,
+                "Result": verdict,
+                "Details": result1[:100]
+            })
 
 elif page == "📋 History":
     st.title("📋 Detection History")
