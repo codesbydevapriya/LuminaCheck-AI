@@ -1,11 +1,11 @@
+import os
 import streamlit as st
 from PIL import Image
 import google.generativeai as genai
 import pandas as pd
 from datetime import datetime
 
-genai.configure(api_key="AIzaSyCXEsM5uV97pYCt1tX6O-ruqK0vCUROyXw")
-
+genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
 st.set_page_config(page_title="LuminaCheck AI", page_icon="🔍", layout="wide")
 
 st.markdown("""
