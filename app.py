@@ -10,128 +10,309 @@ genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
 
 st.set_page_config(page_title="LuminaCheck AI", page_icon="🔍", layout="wide")
 
+# Animated background particles
 st.markdown("""
-    <style>
-    /* Main background */
-    .stApp { background-color: #0e1117; }
-    
-    /* Sidebar */
-    [data-testid="stSidebar"] { background-color: #1a1a2e; }
-    
-    /* Button */
-    .stButton>button {
-        background: linear-gradient(135deg, #4CAF50, #2e7d32);
-        color: white;
-        border-radius: 12px;
-        padding: 12px 28px;
-        font-size: 16px;
-        font-weight: bold;
-        border: none;
-        box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
-        transition: all 0.3s ease;
-        width: 100%;
-    }
-    .stButton>button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(76, 175, 80, 0.5);
-    }
+<div id="particles-bg"></div>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+* { font-family: 'Inter', sans-serif; }
 
-    /* Title styling */
-    h1 { color: #ffffff !important; font-size: 2.5rem !important; }
-    h2 { color: #c9a84c !important; }
-    h3 { color: #a0c4ff !important; }
+#particles-bg {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 0;
+    overflow: hidden;
+}
 
-    /* Card style for results */
-    .result-card {
-        background: #1e2a3a;
-        border-radius: 15px;
-        padding: 20px;
-        margin: 10px 0;
-        border-left: 4px solid #4CAF50;
-    }
+.particle {
+    position: fixed;
+    border-radius: 50%;
+    pointer-events: none;
+    animation: floatUp linear infinite;
+    opacity: 0;
+}
 
-    /* Upload area */
-    [data-testid="stFileUploader"] {
-        border: 2px dashed #c9a84c;
-        border-radius: 12px;
-        padding: 10px;
-    }
+@keyframes floatUp {
+    0% { transform: translateY(100vh) scale(0); opacity: 0; }
+    10% { opacity: 0.6; }
+    90% { opacity: 0.3; }
+    100% { transform: translateY(-10vh) scale(1); opacity: 0; }
+}
+@keyframes drift {
+    0%, 100% { margin-left: 0px; }
+    50% { margin-left: 30px; }
+}
 
-    /* Scanning animation */
-    @keyframes scan {
-        0% { top: 0%; }
-        100% { top: 100%; }
-    }
-    @keyframes pulse {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.5; }
-    }
-    .scanning-text {
-        animation: pulse 1s infinite;
-        color: #4CAF50;
-        font-size: 18px;
-        font-weight: bold;
-        text-align: center;
-    }
-    </style>
+.stApp { background: #050a14 !important; }
+[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #0d1421 0%, #111827 100%) !important;
+    border-right: 1px solid #1e3a5f;
+}
+.stButton>button {
+    background: linear-gradient(135deg, #00d4aa, #0099ff) !important;
+    color: white !important;
+    border-radius: 12px !important;
+    padding: 14px 28px !important;
+    font-size: 15px !important;
+    font-weight: 600 !important;
+    border: none !important;
+    box-shadow: 0 0 20px rgba(0, 212, 170, 0.3) !important;
+    transition: all 0.3s ease !important;
+    width: 100% !important;
+}
+.stButton>button:hover {
+    transform: translateY(-3px) !important;
+    box-shadow: 0 0 35px rgba(0, 212, 170, 0.6) !important;
+}
+h1 {
+    background: linear-gradient(135deg, #00d4aa, #0099ff, #c9a84c);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-size: 2.8rem !important;
+    font-weight: 700 !important;
+}
+[data-testid="stFileUploader"] {
+    background: #0d1421;
+    border: 2px dashed #1e3a5f;
+    border-radius: 16px;
+}
+.stSuccess {
+    background: rgba(0, 212, 170, 0.1) !important;
+    border: 1px solid #00d4aa !important;
+    border-radius: 12px !important;
+}
+.stError {
+    background: rgba(255, 59, 48, 0.1) !important;
+    border: 1px solid #ff3b30 !important;
+    border-radius: 12px !important;
+}
+@keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-8px); }
+}
+@keyframes glow {
+    0%, 100% { box-shadow: 0 0 20px rgba(0,212,170,0.3); }
+    50% { box-shadow: 0 0 40px rgba(0,212,170,0.7); }
+}
+@keyframes slideIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+@keyframes rotate {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+.hero-logo { animation: float 3s ease-in-out infinite; display: inline-block; }
+.sidebar-logo { animation: float 4s ease-in-out infinite; }
+.scan-container {
+    position: relative;
+    overflow: hidden;
+    border-radius: 16px;
+    border: 2px solid #00d4aa;
+    animation: glow 2s ease-in-out infinite;
+}
+.stat-card {
+    background: linear-gradient(135deg, #0d1421, #111827);
+    border: 1px solid #1e3a5f;
+    border-radius: 16px;
+    padding: 20px;
+    text-align: center;
+    transition: all 0.3s ease;
+    animation: slideIn 0.5s ease-out;
+}
+.stat-card:hover {
+    border-color: #00d4aa;
+    transform: translateY(-5px);
+    box-shadow: 0 10px 30px rgba(0,212,170,0.2);
+}
+.verdict-box {
+    border-radius: 16px;
+    padding: 25px;
+    animation: slideIn 0.6s ease-out;
+    text-align: center;
+}
+.verdict-real {
+    background: linear-gradient(135deg, rgba(0,212,170,0.15), rgba(0,153,255,0.15));
+    border: 2px solid #00d4aa;
+    box-shadow: 0 0 30px rgba(0,212,170,0.2);
+}
+.verdict-fake {
+    background: linear-gradient(135deg, rgba(255,59,48,0.15), rgba(255,100,50,0.15));
+    border: 2px solid #ff3b30;
+    box-shadow: 0 0 30px rgba(255,59,48,0.2);
+}
+.spinning-loader {
+    width: 50px; height: 50px;
+    border: 4px solid #1e3a5f;
+    border-top: 4px solid #00d4aa;
+    border-radius: 50%;
+    animation: rotate 1s linear infinite;
+    margin: 0 auto;
+}
+.tag {
+    display: inline-block;
+    background: rgba(0,212,170,0.15);
+    border: 1px solid #00d4aa;
+    color: #00d4aa;
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-size: 12px;
+    font-weight: 500;
+    margin: 3px;
+}
+</style>
+
+<script>
+const colors = ['#00d4aa', '#0099ff', '#c9a84c', '#7c3aed', '#00d4aa'];
+const bg = document.getElementById('particles-bg');
+
+function createParticle() {
+    const p = document.createElement('div');
+    p.className = 'particle';
+    const size = Math.random() * 6 + 2;
+    const x = Math.random() * 100;
+    const duration = Math.random() * 15 + 8;
+    const delay = Math.random() * 5;
+    const color = colors[Math.floor(Math.random() * colors.length)];
+    p.style.cssText = `
+        width: ${size}px;
+        height: ${size}px;
+        left: ${x}%;
+        background: ${color};
+        box-shadow: 0 0 ${size * 2}px ${color};
+        animation-duration: ${duration}s;
+        animation-delay: ${delay}s;
+    `;
+    bg.appendChild(p);
+    setTimeout(() => p.remove(), (duration + delay) * 1000);
+}
+
+setInterval(createParticle, 300);
+for(let i = 0; i < 20; i++) setTimeout(createParticle, i * 150);
+</script>
 """, unsafe_allow_html=True)
 
-LOGO_SVG = """
-<svg width="55" height="55" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-  <circle cx="90" cy="90" r="70" fill="#1a1a2e"/>
-  <circle cx="90" cy="90" r="70" fill="none" stroke="#c9a84c" stroke-width="6"/>
-  <ellipse cx="90" cy="90" rx="30" ry="30" fill="#c9a84c"/>
-  <ellipse cx="90" cy="90" rx="18" ry="18" fill="#1a1a2e"/>
-  <ellipse cx="90" cy="90" rx="9" ry="9" fill="#c9a84c" opacity="0.6"/>
-  <circle cx="98" cy="82" r="5" fill="white" opacity="0.9"/>
-  <line x1="130" y1="130" x2="155" y2="155" stroke="#c9a84c" stroke-width="10" stroke-linecap="round"/>
+LOGO_SVG = """<svg width="55" height="55" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <defs><radialGradient id="g1" cx="50%" cy="50%" r="50%">
+    <stop offset="0%" style="stop-color:#00d4aa"/>
+    <stop offset="100%" style="stop-color:#0099ff"/>
+  </radialGradient></defs>
+  <circle cx="90" cy="90" r="72" fill="#0d1421"/>
+  <circle cx="90" cy="90" r="72" fill="none" stroke="url(#g1)" stroke-width="5"/>
+  <circle cx="90" cy="90" r="72" fill="none" stroke="#c9a84c" stroke-width="1.5" stroke-dasharray="8,6" opacity="0.4"/>
+  <ellipse cx="90" cy="90" rx="32" ry="32" fill="url(#g1)"/>
+  <ellipse cx="90" cy="90" rx="19" ry="19" fill="#0d1421"/>
+  <ellipse cx="90" cy="90" rx="10" ry="10" fill="url(#g1)" opacity="0.7"/>
+  <circle cx="99" cy="81" r="6" fill="white" opacity="0.9"/>
+  <line x1="132" y1="132" x2="158" y2="158" stroke="#c9a84c" stroke-width="11" stroke-linecap="round"/>
+  <line x1="132" y1="132" x2="158" y2="158" stroke="url(#g1)" stroke-width="6" stroke-linecap="round"/>
+</svg>"""
+
+LOGO_BIG = """<svg width="80" height="80" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <defs><radialGradient id="g2" cx="50%" cy="50%" r="50%">
+    <stop offset="0%" style="stop-color:#00d4aa"/>
+    <stop offset="100%" style="stop-color:#0099ff"/>
+  </radialGradient></defs>
+  <circle cx="90" cy="90" r="72" fill="#0d1421"/>
+  <circle cx="90" cy="90" r="72" fill="none" stroke="url(#g2)" stroke-width="5"/>
+  <circle cx="90" cy="90" r="72" fill="none" stroke="#c9a84c" stroke-width="1.5" stroke-dasharray="8,6" opacity="0.4"/>
+  <ellipse cx="90" cy="90" rx="32" ry="32" fill="url(#g2)"/>
+  <ellipse cx="90" cy="90" rx="19" ry="19" fill="#0d1421"/>
+  <ellipse cx="90" cy="90" rx="10" ry="10" fill="url(#g2)" opacity="0.7"/>
+  <circle cx="99" cy="81" r="6" fill="white" opacity="0.9"/>
+  <line x1="132" y1="132" x2="158" y2="158" stroke="#c9a84c" stroke-width="11" stroke-linecap="round"/>
+  <line x1="132" y1="132" x2="158" y2="158" stroke="url(#g2)" stroke-width="6" stroke-linecap="round"/>
 </svg>"""
 
 page = st.sidebar.radio("Navigation", ["🔍 Detect", "📋 History", "ℹ️ About"])
 st.sidebar.markdown("---")
-st.sidebar.markdown(LOGO_SVG, unsafe_allow_html=True)
-st.sidebar.markdown("<p style='color:#c9a84c; font-weight:bold; font-size:16px;'>LuminaCheck AI</p>", unsafe_allow_html=True)
-st.sidebar.write("👋 Welcome to LuminaCheck AI!")
-st.sidebar.write("📌 Upload an image and detect if it is REAL or FAKE using AI.")
+st.sidebar.markdown(f'<div class="sidebar-logo">{LOGO_SVG}</div>', unsafe_allow_html=True)
+st.sidebar.markdown("<p style='color:#00d4aa; font-weight:700; font-size:17px; margin:5px 0;'>LuminaCheck AI</p>", unsafe_allow_html=True)
+st.sidebar.markdown("<p style='color:#555; font-size:12px; font-style:italic;'>Where Light Reveals Truth</p>", unsafe_allow_html=True)
 st.sidebar.markdown("---")
-st.sidebar.markdown("<p style='color:#555; font-size:12px;'>Powered by Google Gemini AI</p>", unsafe_allow_html=True)
+st.sidebar.markdown("<p style='color:#8899aa; font-size:13px;'>👋 Welcome to LuminaCheck AI!</p>", unsafe_allow_html=True)
+st.sidebar.markdown("<p style='color:#8899aa; font-size:12px;'>📌 Upload any image to detect if it is REAL or FAKE using advanced AI forensics.</p>", unsafe_allow_html=True)
+st.sidebar.markdown("---")
+st.sidebar.markdown("<p style='color:#333; font-size:11px; text-align:center;'>⚡ Powered by Google Gemini AI</p>", unsafe_allow_html=True)
 
 if "history" not in st.session_state:
     st.session_state.history = []
 
 if page == "🔍 Detect":
-    col1, col2 = st.columns([1, 8])
+    col1, col2 = st.columns([1, 7])
     with col1:
-        st.markdown(LOGO_SVG, unsafe_allow_html=True)
+        st.markdown(f'<div class="hero-logo">{LOGO_BIG}</div>', unsafe_allow_html=True)
     with col2:
         st.title("LuminaCheck AI")
-        st.markdown("<p style='color:#c9a84c; font-size:18px; font-style:italic;'>Where Light Reveals Truth</p>", unsafe_allow_html=True)
-    st.markdown("---")
+        st.markdown("<p style='color:#8899aa; font-size:16px; margin-top:-10px;'>Advanced AI-Powered Image Authenticity Detection</p>", unsafe_allow_html=True)
+        st.markdown("""
+        <span class="tag">🤖 Gemini AI</span>
+        <span class="tag">🔬 Forensic Analysis</span>
+        <span class="tag">⚡ Real-time</span>
+        <span class="tag">🛡️ Secure</span>
+        """, unsafe_allow_html=True)
 
-    uploaded_file = st.file_uploader("📤 Upload an Image to Analyze", type=["jpg", "jpeg", "png"])
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.markdown("""<div class="stat-card">
+            <h2 style='color:#00d4aa; font-size:2rem; margin:0;'>AI</h2>
+            <p style='color:#8899aa; margin:5px 0 0 0; font-size:13px;'>Powered Detection</p>
+        </div>""", unsafe_allow_html=True)
+    with c2:
+        st.markdown("""<div class="stat-card">
+            <h2 style='color:#0099ff; font-size:2rem; margin:0;'>3x</h2>
+            <p style='color:#8899aa; margin:5px 0 0 0; font-size:13px;'>Analysis Modes</p>
+        </div>""", unsafe_allow_html=True)
+    with c3:
+        st.markdown("""<div class="stat-card">
+            <h2 style='color:#c9a84c; font-size:2rem; margin:0;'>⚡</h2>
+            <p style='color:#8899aa; margin:5px 0 0 0; font-size:13px;'>Instant Results</p>
+        </div>""", unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#8899aa; font-size:14px;'>📤 Upload Image</p>", unsafe_allow_html=True)
+    uploaded_file = st.file_uploader("", type=["jpg", "jpeg", "png"], label_visibility="collapsed")
 
     if uploaded_file is not None:
+        st.markdown("<br>", unsafe_allow_html=True)
         col1, col2 = st.columns([1, 1])
         with col1:
             image = Image.open(uploaded_file)
-            st.image(image, caption="📸 Uploaded Image", use_container_width=True)
+            st.markdown('<div class="scan-container">', unsafe_allow_html=True)
+            st.image(image, use_container_width=True)
+            st.markdown('</div>', unsafe_allow_html=True)
         with col2:
-            st.markdown("<br><br>", unsafe_allow_html=True)
-            st.success("✅ Image uploaded successfully!")
-            st.markdown(f"**File:** {uploaded_file.name}")
-            st.markdown(f"**Size:** {uploaded_file.size / 1024:.1f} KB")
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown(f"""
+            <div class="stat-card">
+                <p style='color:#00d4aa; font-weight:600; font-size:15px; margin:0;'>📁 File Details</p>
+                <hr style='border-color:#1e3a5f; margin:10px 0;'>
+                <p style='color:#8899aa; font-size:13px; margin:5px 0;'>📄 <b style='color:#fff;'>{uploaded_file.name}</b></p>
+                <p style='color:#8899aa; font-size:13px; margin:5px 0;'>💾 Size: <b style='color:#fff;'>{uploaded_file.size / 1024:.1f} KB</b></p>
+                <p style='color:#00d4aa; font-size:13px; margin:5px 0;'>✅ Ready for analysis</p>
+            </div>
+            """, unsafe_allow_html=True)
             st.markdown("<br>", unsafe_allow_html=True)
 
             if st.button("🔍 Analyze Image Now"):
-                progress_bar = st.progress(0)
-                status = st.empty()
-
-                status.markdown("<div class='scanning-text'>🔍 Initializing AI Scanner...</div>", unsafe_allow_html=True)
-                for i in range(30):
-                    time.sleep(0.03)
-                    progress_bar.progress(i)
-
-                status.markdown("<div class='scanning-text'>🤖 Gemini AI Analyzing Image...</div>", unsafe_allow_html=True)
+                result_placeholder = st.empty()
+                for msg in [
+                    "🔍 Initializing forensic scanner...",
+                    "🧬 Loading AI model...",
+                    "🤖 Gemini AI analyzing image...",
+                    "📊 Processing results..."
+                ]:
+                    result_placeholder.markdown(f"""
+                    <div style='text-align:center; padding:30px;'>
+                        <div class='spinning-loader'></div>
+                        <p style='color:#00d4aa; font-size:16px; margin-top:20px; font-weight:600;'>{msg}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    time.sleep(0.8)
 
                 model = genai.GenerativeModel("gemini-2.5-flash")
                 response = model.generate_content([
@@ -146,26 +327,25 @@ Confidence: [0-100%]
 Reason: [2-3 specific visual clues]"""
                 ])
 
-                for i in range(30, 100):
-                    time.sleep(0.02)
-                    progress_bar.progress(i)
-
-                status.markdown("<div class='scanning-text'>✅ Analysis Complete!</div>", unsafe_allow_html=True)
-                progress_bar.progress(100)
-                time.sleep(0.5)
-                progress_bar.empty()
-                status.empty()
-
                 result = response.text
-                st.markdown("---")
-                st.subheader("🧠 AI Detection Result")
+                result_placeholder.empty()
 
                 if "FAKE" in result.upper() or "AI-GENERATED" in result.upper():
-                    st.error(f"⚠️ **FAKE / AI-GENERATED DETECTED**\n\n{result}")
                     verdict = "FAKE/AI-GENERATED"
+                    st.markdown(f"""
+                    <div class="verdict-box verdict-fake">
+                        <h2 style='color:#ff3b30; margin:0;'>⚠️ FAKE / AI-GENERATED</h2>
+                        <p style='color:#8899aa; font-size:14px; margin-top:15px;'>{result}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
                 else:
-                    st.success(f"✅ **REAL IMAGE VERIFIED**\n\n{result}")
                     verdict = "REAL"
+                    st.markdown(f"""
+                    <div class="verdict-box verdict-real">
+                        <h2 style='color:#00d4aa; margin:0;'>✅ REAL IMAGE VERIFIED</h2>
+                        <p style='color:#8899aa; font-size:14px; margin-top:15px;'>{result}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
 
                 st.session_state.history.append({
                     "Time": datetime.now().strftime("%H:%M:%S"),
@@ -183,30 +363,51 @@ elif page == "📋 History":
         csv = df.to_csv(index=False)
         st.download_button("📥 Download Report (CSV)", csv, "lumina_report.csv", "text/csv")
     else:
-        st.info("📭 No detections yet. Go to Detect page and upload an image!")
+        st.markdown("""
+        <div style='text-align:center; padding:50px;'>
+            <p style='font-size:50px;'>📭</p>
+            <p style='color:#8899aa; font-size:18px;'>No detections yet</p>
+            <p style='color:#555; font-size:14px;'>Go to Detect page and upload an image!</p>
+        </div>
+        """, unsafe_allow_html=True)
 
 elif page == "ℹ️ About":
     col1, col2 = st.columns([1, 8])
     with col1:
-        st.markdown(LOGO_SVG, unsafe_allow_html=True)
+        st.markdown(f'<div class="hero-logo">{LOGO_BIG}</div>', unsafe_allow_html=True)
     with col2:
         st.title("About LuminaCheck AI")
     st.markdown("---")
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown("""
+        <div class="stat-card">
+            <h3 style='color:#00d4aa;'>🔍 What is LuminaCheck AI?</h3>
+            <p style='color:#8899aa; font-size:14px; line-height:1.7;'>
+            LuminaCheck AI is a Final Year BCA Project that uses Google Gemini Vision AI to detect whether a digital image is REAL, FAKE, or AI-GENERATED.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+    with c2:
+        st.markdown("""
+        <div class="stat-card">
+            <h3 style='color:#0099ff;'>🛠️ Technologies Used</h3>
+            <p style='color:#8899aa; font-size:14px; line-height:1.8;'>
+            🐍 Python &nbsp;|&nbsp; ⚡ Streamlit<br>
+            🤖 Google Gemini AI<br>
+            🖼️ Pillow &nbsp;|&nbsp; 📊 Pandas<br>
+            ☁️ Streamlit Cloud
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
     st.markdown("""
-    ## 🔍 What is LuminaCheck AI?
-    LuminaCheck AI is a **Final Year BCA Project** that uses **Google Gemini AI** to detect whether an image is **REAL**, **FAKE**, or **AI-GENERATED**.
-
-    ## 🛠️ Technologies Used
-    - **Python** — Core programming language
-    - **Streamlit** — Web application framework
-    - **Google Gemini AI** — Image analysis engine
-    - **Pillow** — Image processing
-    - **Pandas** — Data management
-
-    ## 🌐 Live Links
-    - **App:** https://luminacheck-ai.streamlit.app
-    - **GitHub:** https://github.com/codesbydevapriya/LuminaCheck-AI
-
-    ## 👩‍💻 Developed By
-    **Devapriya** — BCA Final Year Student | March 2026
-    """)
+    <div class="stat-card" style='text-align:center;'>
+        <h3 style='color:#c9a84c;'>👩‍💻 Developed By</h3>
+        <p style='color:#fff; font-size:20px; font-weight:600;'>Devapriya</p>
+        <p style='color:#8899aa;'>BCA Final Year Student | March 2026</p>
+        <br>
+        <span class="tag">🌐 luminacheck-ai.streamlit.app</span>
+        <span class="tag">📂 github.com/codesbydevapriya</span>
+    </div>
+    """, unsafe_allow_html=True)
