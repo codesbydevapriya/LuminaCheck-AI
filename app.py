@@ -10,42 +10,98 @@ genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
 
 st.set_page_config(page_title="LuminaCheck AI", page_icon="🔍", layout="wide")
 
-# Animated background particles
 st.markdown("""
-<div id="particles-bg"></div>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 * { font-family: 'Inter', sans-serif; }
 
-#particles-bg {
+.stApp { background: #050a14 !important; }
+
+/* Animated gradient background */
+.stApp::before {
+    content: '';
     position: fixed;
     top: 0; left: 0;
     width: 100%; height: 100%;
+    background: 
+        radial-gradient(ellipse at 20% 50%, rgba(0,212,170,0.06) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 20%, rgba(0,153,255,0.06) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 80%, rgba(201,168,76,0.04) 0%, transparent 50%);
+    animation: bgMove 10s ease-in-out infinite alternate;
     pointer-events: none;
     z-index: 0;
-    overflow: hidden;
 }
 
-.particle {
+@keyframes bgMove {
+    0% { 
+        background: 
+            radial-gradient(ellipse at 20% 50%, rgba(0,212,170,0.08) 0%, transparent 50%),
+            radial-gradient(ellipse at 80% 20%, rgba(0,153,255,0.06) 0%, transparent 50%),
+            radial-gradient(ellipse at 50% 80%, rgba(201,168,76,0.05) 0%, transparent 50%);
+    }
+    33% {
+        background: 
+            radial-gradient(ellipse at 70% 30%, rgba(0,212,170,0.08) 0%, transparent 50%),
+            radial-gradient(ellipse at 20% 70%, rgba(0,153,255,0.06) 0%, transparent 50%),
+            radial-gradient(ellipse at 80% 60%, rgba(201,168,76,0.05) 0%, transparent 50%);
+    }
+    66% {
+        background: 
+            radial-gradient(ellipse at 50% 80%, rgba(0,212,170,0.08) 0%, transparent 50%),
+            radial-gradient(ellipse at 90% 50%, rgba(0,153,255,0.06) 0%, transparent 50%),
+            radial-gradient(ellipse at 10% 20%, rgba(201,168,76,0.05) 0%, transparent 50%);
+    }
+    100% {
+        background: 
+            radial-gradient(ellipse at 30% 20%, rgba(0,212,170,0.08) 0%, transparent 50%),
+            radial-gradient(ellipse at 60% 80%, rgba(0,153,255,0.06) 0%, transparent 50%),
+            radial-gradient(ellipse at 80% 30%, rgba(201,168,76,0.05) 0%, transparent 50%);
+    }
+}
+
+/* Floating orbs */
+.orb {
     position: fixed;
     border-radius: 50%;
+    filter: blur(60px);
     pointer-events: none;
-    animation: floatUp linear infinite;
-    opacity: 0;
+    z-index: 0;
+    opacity: 0.15;
+}
+.orb1 {
+    width: 400px; height: 400px;
+    background: #00d4aa;
+    top: -100px; left: -100px;
+    animation: orbFloat1 15s ease-in-out infinite;
+}
+.orb2 {
+    width: 300px; height: 300px;
+    background: #0099ff;
+    bottom: -50px; right: -50px;
+    animation: orbFloat2 12s ease-in-out infinite;
+}
+.orb3 {
+    width: 200px; height: 200px;
+    background: #c9a84c;
+    top: 50%; left: 50%;
+    animation: orbFloat3 18s ease-in-out infinite;
 }
 
-@keyframes floatUp {
-    0% { transform: translateY(100vh) scale(0); opacity: 0; }
-    10% { opacity: 0.6; }
-    90% { opacity: 0.3; }
-    100% { transform: translateY(-10vh) scale(1); opacity: 0; }
+@keyframes orbFloat1 {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    33% { transform: translate(100px, 80px) scale(1.1); }
+    66% { transform: translate(-50px, 150px) scale(0.9); }
 }
-@keyframes drift {
-    0%, 100% { margin-left: 0px; }
-    50% { margin-left: 30px; }
+@keyframes orbFloat2 {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    50% { transform: translate(-120px, -80px) scale(1.2); }
+}
+@keyframes orbFloat3 {
+    0%, 100% { transform: translate(-50%, -50%) scale(1); }
+    33% { transform: translate(-30%, -70%) scale(1.3); }
+    66% { transform: translate(-70%, -30%) scale(0.8); }
 }
 
-.stApp { background: #050a14 !important; }
 [data-testid="stSidebar"] {
     background: linear-gradient(180deg, #0d1421 0%, #111827 100%) !important;
     border-right: 1px solid #1e3a5f;
@@ -58,13 +114,13 @@ st.markdown("""
     font-size: 15px !important;
     font-weight: 600 !important;
     border: none !important;
-    box-shadow: 0 0 20px rgba(0, 212, 170, 0.3) !important;
+    box-shadow: 0 0 20px rgba(0,212,170,0.3) !important;
     transition: all 0.3s ease !important;
     width: 100% !important;
 }
 .stButton>button:hover {
     transform: translateY(-3px) !important;
-    box-shadow: 0 0 35px rgba(0, 212, 170, 0.6) !important;
+    box-shadow: 0 0 35px rgba(0,212,170,0.6) !important;
 }
 h1 {
     background: linear-gradient(135deg, #00d4aa, #0099ff, #c9a84c);
@@ -77,16 +133,6 @@ h1 {
     background: #0d1421;
     border: 2px dashed #1e3a5f;
     border-radius: 16px;
-}
-.stSuccess {
-    background: rgba(0, 212, 170, 0.1) !important;
-    border: 1px solid #00d4aa !important;
-    border-radius: 12px !important;
-}
-.stError {
-    background: rgba(255, 59, 48, 0.1) !important;
-    border: 1px solid #ff3b30 !important;
-    border-radius: 12px !important;
 }
 @keyframes float {
     0%, 100% { transform: translateY(0px); }
@@ -104,6 +150,11 @@ h1 {
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
 }
+@keyframes twinkle {
+    0%, 100% { opacity: 0.3; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.5); }
+}
+
 .hero-logo { animation: float 3s ease-in-out infinite; display: inline-block; }
 .sidebar-logo { animation: float 4s ease-in-out infinite; }
 .scan-container {
@@ -114,13 +165,14 @@ h1 {
     animation: glow 2s ease-in-out infinite;
 }
 .stat-card {
-    background: linear-gradient(135deg, #0d1421, #111827);
+    background: linear-gradient(135deg, rgba(13,20,33,0.8), rgba(17,24,39,0.8));
     border: 1px solid #1e3a5f;
     border-radius: 16px;
     padding: 20px;
     text-align: center;
     transition: all 0.3s ease;
     animation: slideIn 0.5s ease-out;
+    backdrop-filter: blur(10px);
 }
 .stat-card:hover {
     border-color: #00d4aa;
@@ -132,6 +184,7 @@ h1 {
     padding: 25px;
     animation: slideIn 0.6s ease-out;
     text-align: center;
+    backdrop-filter: blur(10px);
 }
 .verdict-real {
     background: linear-gradient(135deg, rgba(0,212,170,0.15), rgba(0,153,255,0.15));
@@ -162,36 +215,47 @@ h1 {
     font-weight: 500;
     margin: 3px;
 }
+
+/* Star dots */
+.stars {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 0;
+}
+.star {
+    position: absolute;
+    width: 2px; height: 2px;
+    background: white;
+    border-radius: 50%;
+    animation: twinkle ease-in-out infinite;
+}
 </style>
 
-<script>
-const colors = ['#00d4aa', '#0099ff', '#c9a84c', '#7c3aed', '#00d4aa'];
-const bg = document.getElementById('particles-bg');
+<!-- Floating orbs -->
+<div class="orb orb1"></div>
+<div class="orb orb2"></div>
+<div class="orb orb3"></div>
 
-function createParticle() {
-    const p = document.createElement('div');
-    p.className = 'particle';
-    const size = Math.random() * 6 + 2;
-    const x = Math.random() * 100;
-    const duration = Math.random() * 15 + 8;
-    const delay = Math.random() * 5;
-    const color = colors[Math.floor(Math.random() * colors.length)];
-    p.style.cssText = `
-        width: ${size}px;
-        height: ${size}px;
-        left: ${x}%;
-        background: ${color};
-        box-shadow: 0 0 ${size * 2}px ${color};
-        animation-duration: ${duration}s;
-        animation-delay: ${delay}s;
-    `;
-    bg.appendChild(p);
-    setTimeout(() => p.remove(), (duration + delay) * 1000);
-}
-
-setInterval(createParticle, 300);
-for(let i = 0; i < 20; i++) setTimeout(createParticle, i * 150);
-</script>
+<!-- Twinkling stars -->
+<div class="stars">
+    <div class="star" style="top:5%;left:10%;animation-duration:2s;animation-delay:0s;"></div>
+    <div class="star" style="top:15%;left:25%;animation-duration:3s;animation-delay:0.5s;width:3px;height:3px;background:#00d4aa;"></div>
+    <div class="star" style="top:8%;left:45%;animation-duration:2.5s;animation-delay:1s;"></div>
+    <div class="star" style="top:20%;left:65%;animation-duration:4s;animation-delay:0.3s;width:3px;height:3px;background:#0099ff;"></div>
+    <div class="star" style="top:12%;left:80%;animation-duration:2s;animation-delay:1.5s;"></div>
+    <div class="star" style="top:35%;left:5%;animation-duration:3s;animation-delay:0.8s;width:3px;height:3px;background:#c9a84c;"></div>
+    <div class="star" style="top:45%;left:90%;animation-duration:2.5s;animation-delay:0.2s;"></div>
+    <div class="star" style="top:60%;left:15%;animation-duration:3.5s;animation-delay:1.2s;width:3px;height:3px;background:#00d4aa;"></div>
+    <div class="star" style="top:70%;left:35%;animation-duration:2s;animation-delay:0.6s;"></div>
+    <div class="star" style="top:80%;left:55%;animation-duration:4s;animation-delay:0.9s;width:3px;height:3px;background:#0099ff;"></div>
+    <div class="star" style="top:90%;left:75%;animation-duration:2.5s;animation-delay:1.8s;"></div>
+    <div class="star" style="top:25%;left:50%;animation-duration:3s;animation-delay:0.4s;width:3px;height:3px;background:#c9a84c;"></div>
+    <div class="star" style="top:55%;left:70%;animation-duration:2s;animation-delay:1.1s;"></div>
+    <div class="star" style="top:40%;left:40%;animation-duration:3.5s;animation-delay:0.7s;width:3px;height:3px;background:#00d4aa;"></div>
+    <div class="star" style="top:75%;left:88%;animation-duration:2.5s;animation-delay:1.4s;"></div>
+</div>
 """, unsafe_allow_html=True)
 
 LOGO_SVG = """<svg width="55" height="55" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
@@ -255,7 +319,6 @@ if page == "🔍 Detect":
         """, unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
-
     c1, c2, c3 = st.columns(3)
     with c1:
         st.markdown("""<div class="stat-card">
@@ -326,7 +389,6 @@ Verdict: [REAL or AI-GENERATED or FAKE]
 Confidence: [0-100%]
 Reason: [2-3 specific visual clues]"""
                 ])
-
                 result = response.text
                 result_placeholder.empty()
 
