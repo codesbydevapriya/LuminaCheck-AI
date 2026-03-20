@@ -17,245 +17,112 @@ st.markdown("""
 
 .stApp { background: #050a14 !important; }
 
-/* Animated gradient background */
 .stApp::before {
     content: '';
     position: fixed;
     top: 0; left: 0;
     width: 100%; height: 100%;
-    background: 
-        radial-gradient(ellipse at 20% 50%, rgba(0,212,170,0.06) 0%, transparent 50%),
-        radial-gradient(ellipse at 80% 20%, rgba(0,153,255,0.06) 0%, transparent 50%),
-        radial-gradient(ellipse at 50% 80%, rgba(201,168,76,0.04) 0%, transparent 50%);
     animation: bgMove 10s ease-in-out infinite alternate;
     pointer-events: none;
     z-index: 0;
 }
 
 @keyframes bgMove {
-    0% { 
-        background: 
-            radial-gradient(ellipse at 20% 50%, rgba(0,212,170,0.08) 0%, transparent 50%),
-            radial-gradient(ellipse at 80% 20%, rgba(0,153,255,0.06) 0%, transparent 50%),
-            radial-gradient(ellipse at 50% 80%, rgba(201,168,76,0.05) 0%, transparent 50%);
-    }
-    33% {
-        background: 
-            radial-gradient(ellipse at 70% 30%, rgba(0,212,170,0.08) 0%, transparent 50%),
-            radial-gradient(ellipse at 20% 70%, rgba(0,153,255,0.06) 0%, transparent 50%),
-            radial-gradient(ellipse at 80% 60%, rgba(201,168,76,0.05) 0%, transparent 50%);
-    }
-    66% {
-        background: 
-            radial-gradient(ellipse at 50% 80%, rgba(0,212,170,0.08) 0%, transparent 50%),
-            radial-gradient(ellipse at 90% 50%, rgba(0,153,255,0.06) 0%, transparent 50%),
-            radial-gradient(ellipse at 10% 20%, rgba(201,168,76,0.05) 0%, transparent 50%);
-    }
-    100% {
-        background: 
-            radial-gradient(ellipse at 30% 20%, rgba(0,212,170,0.08) 0%, transparent 50%),
-            radial-gradient(ellipse at 60% 80%, rgba(0,153,255,0.06) 0%, transparent 50%),
-            radial-gradient(ellipse at 80% 30%, rgba(201,168,76,0.05) 0%, transparent 50%);
-    }
+    0% { background: radial-gradient(ellipse at 20% 50%, rgba(0,212,170,0.08) 0%, transparent 50%), radial-gradient(ellipse at 80% 20%, rgba(0,153,255,0.06) 0%, transparent 50%); }
+    50% { background: radial-gradient(ellipse at 70% 30%, rgba(0,212,170,0.08) 0%, transparent 50%), radial-gradient(ellipse at 20% 70%, rgba(0,153,255,0.06) 0%, transparent 50%); }
+    100% { background: radial-gradient(ellipse at 30% 20%, rgba(0,212,170,0.08) 0%, transparent 50%), radial-gradient(ellipse at 60% 80%, rgba(0,153,255,0.06) 0%, transparent 50%); }
 }
 
-/* Floating orbs */
-.orb {
-    position: fixed;
-    border-radius: 50%;
-    filter: blur(60px);
-    pointer-events: none;
-    z-index: 0;
-    opacity: 0.15;
-}
-.orb1 {
-    width: 400px; height: 400px;
-    background: #00d4aa;
-    top: -100px; left: -100px;
-    animation: orbFloat1 15s ease-in-out infinite;
-}
-.orb2 {
-    width: 300px; height: 300px;
-    background: #0099ff;
-    bottom: -50px; right: -50px;
-    animation: orbFloat2 12s ease-in-out infinite;
-}
-.orb3 {
-    width: 200px; height: 200px;
-    background: #c9a84c;
-    top: 50%; left: 50%;
-    animation: orbFloat3 18s ease-in-out infinite;
-}
+.orb { position: fixed; border-radius: 50%; filter: blur(60px); pointer-events: none; z-index: 0; opacity: 0.15; }
+.orb1 { width: 400px; height: 400px; background: #00d4aa; top: -100px; left: -100px; animation: orbFloat1 15s ease-in-out infinite; }
+.orb2 { width: 300px; height: 300px; background: #0099ff; bottom: -50px; right: -50px; animation: orbFloat2 12s ease-in-out infinite; }
+.orb3 { width: 200px; height: 200px; background: #c9a84c; top: 50%; left: 50%; animation: orbFloat3 18s ease-in-out infinite; }
 
-@keyframes orbFloat1 {
-    0%, 100% { transform: translate(0, 0) scale(1); }
-    33% { transform: translate(100px, 80px) scale(1.1); }
-    66% { transform: translate(-50px, 150px) scale(0.9); }
-}
-@keyframes orbFloat2 {
-    0%, 100% { transform: translate(0, 0) scale(1); }
-    50% { transform: translate(-120px, -80px) scale(1.2); }
-}
-@keyframes orbFloat3 {
-    0%, 100% { transform: translate(-50%, -50%) scale(1); }
-    33% { transform: translate(-30%, -70%) scale(1.3); }
-    66% { transform: translate(-70%, -30%) scale(0.8); }
-}
+@keyframes orbFloat1 { 0%, 100% { transform: translate(0,0) scale(1); } 33% { transform: translate(100px,80px) scale(1.1); } 66% { transform: translate(-50px,150px) scale(0.9); } }
+@keyframes orbFloat2 { 0%, 100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-120px,-80px) scale(1.2); } }
+@keyframes orbFloat3 { 0%, 100% { transform: translate(-50%,-50%) scale(1); } 33% { transform: translate(-30%,-70%) scale(1.3); } 66% { transform: translate(-70%,-30%) scale(0.8); } }
+@keyframes twinkle { 0%, 100% { opacity: 0.3; transform: scale(1); } 50% { opacity: 1; transform: scale(1.5); } }
+@keyframes float { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-8px); } }
+@keyframes glow { 0%, 100% { box-shadow: 0 0 20px rgba(0,212,170,0.3); } 50% { box-shadow: 0 0 40px rgba(0,212,170,0.7); } }
+@keyframes slideIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes redPulse { 0%, 100% { box-shadow: 0 0 30px rgba(255,59,48,0.4); } 50% { box-shadow: 0 0 60px rgba(255,59,48,0.8); } }
+@keyframes greenPulse { 0%, 100% { box-shadow: 0 0 30px rgba(0,212,170,0.4); } 50% { box-shadow: 0 0 60px rgba(0,212,170,0.8); } }
 
-[data-testid="stSidebar"] {
-    background: linear-gradient(180deg, #0d1421 0%, #111827 100%) !important;
-    border-right: 1px solid #1e3a5f;
-}
-.stButton>button {
-    background: linear-gradient(135deg, #00d4aa, #0099ff) !important;
-    color: white !important;
-    border-radius: 12px !important;
-    padding: 14px 28px !important;
-    font-size: 15px !important;
-    font-weight: 600 !important;
-    border: none !important;
-    box-shadow: 0 0 20px rgba(0,212,170,0.3) !important;
-    transition: all 0.3s ease !important;
-    width: 100% !important;
-}
-.stButton>button:hover {
-    transform: translateY(-3px) !important;
-    box-shadow: 0 0 35px rgba(0,212,170,0.6) !important;
-}
-h1 {
-    background: linear-gradient(135deg, #00d4aa, #0099ff, #c9a84c);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    font-size: 2.8rem !important;
-    font-weight: 700 !important;
-}
-[data-testid="stFileUploader"] {
-    background: #0d1421;
-    border: 2px dashed #1e3a5f;
-    border-radius: 16px;
-}
-@keyframes float {
-    0%, 100% { transform: translateY(0px); }
-    50% { transform: translateY(-8px); }
-}
-@keyframes glow {
-    0%, 100% { box-shadow: 0 0 20px rgba(0,212,170,0.3); }
-    50% { box-shadow: 0 0 40px rgba(0,212,170,0.7); }
-}
-@keyframes slideIn {
-    from { opacity: 0; transform: translateY(20px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-@keyframes rotate {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-}
-@keyframes twinkle {
-    0%, 100% { opacity: 0.3; transform: scale(1); }
-    50% { opacity: 1; transform: scale(1.5); }
-}
+[data-testid="stSidebar"] { background: linear-gradient(180deg, #0d1421 0%, #111827 100%) !important; border-right: 1px solid #1e3a5f; }
+.stButton>button { background: linear-gradient(135deg, #00d4aa, #0099ff) !important; color: white !important; border-radius: 12px !important; padding: 14px 28px !important; font-size: 15px !important; font-weight: 600 !important; border: none !important; box-shadow: 0 0 20px rgba(0,212,170,0.3) !important; transition: all 0.3s ease !important; width: 100% !important; }
+.stButton>button:hover { transform: translateY(-3px) !important; box-shadow: 0 0 35px rgba(0,212,170,0.6) !important; }
+h1 { background: linear-gradient(135deg, #00d4aa, #0099ff, #c9a84c); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size: 2.8rem !important; font-weight: 700 !important; }
+[data-testid="stFileUploader"] { background: #0d1421; border: 2px dashed #1e3a5f; border-radius: 16px; }
 
 .hero-logo { animation: float 3s ease-in-out infinite; display: inline-block; }
 .sidebar-logo { animation: float 4s ease-in-out infinite; }
-.scan-container {
-    position: relative;
-    overflow: hidden;
-    border-radius: 16px;
-    border: 2px solid #00d4aa;
-    animation: glow 2s ease-in-out infinite;
-}
-.stat-card {
-    background: linear-gradient(135deg, rgba(13,20,33,0.8), rgba(17,24,39,0.8));
-    border: 1px solid #1e3a5f;
-    border-radius: 16px;
-    padding: 20px;
-    text-align: center;
-    transition: all 0.3s ease;
-    animation: slideIn 0.5s ease-out;
-    backdrop-filter: blur(10px);
-}
-.stat-card:hover {
-    border-color: #00d4aa;
-    transform: translateY(-5px);
-    box-shadow: 0 10px 30px rgba(0,212,170,0.2);
-}
-.verdict-box {
-    border-radius: 16px;
-    padding: 25px;
-    animation: slideIn 0.6s ease-out;
-    text-align: center;
-    backdrop-filter: blur(10px);
-}
+.scan-container { position: relative; overflow: hidden; border-radius: 16px; border: 2px solid #00d4aa; animation: glow 2s ease-in-out infinite; }
+.stat-card { background: linear-gradient(135deg, rgba(13,20,33,0.8), rgba(17,24,39,0.8)); border: 1px solid #1e3a5f; border-radius: 16px; padding: 20px; text-align: center; transition: all 0.3s ease; animation: slideIn 0.5s ease-out; backdrop-filter: blur(10px); }
+.stat-card:hover { border-color: #00d4aa; transform: translateY(-5px); box-shadow: 0 10px 30px rgba(0,212,170,0.2); }
+.spinning-loader { width: 50px; height: 50px; border: 4px solid #1e3a5f; border-top: 4px solid #00d4aa; border-radius: 50%; animation: rotate 1s linear infinite; margin: 0 auto; }
+.tag { display: inline-block; background: rgba(0,212,170,0.15); border: 1px solid #00d4aa; color: #00d4aa; border-radius: 20px; padding: 4px 12px; font-size: 12px; font-weight: 500; margin: 3px; }
+
 .verdict-real {
-    background: linear-gradient(135deg, rgba(0,212,170,0.15), rgba(0,153,255,0.15));
-    border: 2px solid #00d4aa;
-    box-shadow: 0 0 30px rgba(0,212,170,0.2);
+    background: linear-gradient(135deg, rgba(0,212,170,0.2), rgba(0,153,255,0.1));
+    border: 3px solid #00d4aa;
+    border-radius: 20px;
+    padding: 30px;
+    text-align: center;
+    animation: greenPulse 2s ease-in-out infinite, slideIn 0.6s ease-out;
 }
 .verdict-fake {
-    background: linear-gradient(135deg, rgba(255,59,48,0.15), rgba(255,100,50,0.15));
-    border: 2px solid #ff3b30;
-    box-shadow: 0 0 30px rgba(255,59,48,0.2);
-}
-.spinning-loader {
-    width: 50px; height: 50px;
-    border: 4px solid #1e3a5f;
-    border-top: 4px solid #00d4aa;
-    border-radius: 50%;
-    animation: rotate 1s linear infinite;
-    margin: 0 auto;
-}
-.tag {
-    display: inline-block;
-    background: rgba(0,212,170,0.15);
-    border: 1px solid #00d4aa;
-    color: #00d4aa;
+    background: linear-gradient(135deg, rgba(255,59,48,0.2), rgba(255,100,50,0.1));
+    border: 3px solid #ff3b30;
     border-radius: 20px;
-    padding: 4px 12px;
-    font-size: 12px;
-    font-weight: 500;
-    margin: 3px;
+    padding: 30px;
+    text-align: center;
+    animation: redPulse 2s ease-in-out infinite, slideIn 0.6s ease-out;
 }
-
-/* Star dots */
-.stars {
-    position: fixed;
-    top: 0; left: 0;
-    width: 100%; height: 100%;
-    pointer-events: none;
-    z-index: 0;
+.verdict-badge-real {
+    background: #00d4aa;
+    color: #050a14;
+    font-size: 22px;
+    font-weight: 800;
+    padding: 12px 30px;
+    border-radius: 50px;
+    display: inline-block;
+    letter-spacing: 2px;
+    margin-bottom: 15px;
 }
-.star {
-    position: absolute;
-    width: 2px; height: 2px;
-    background: white;
-    border-radius: 50%;
-    animation: twinkle ease-in-out infinite;
+.verdict-badge-fake {
+    background: #ff3b30;
+    color: white;
+    font-size: 22px;
+    font-weight: 800;
+    padding: 12px 30px;
+    border-radius: 50px;
+    display: inline-block;
+    letter-spacing: 2px;
+    margin-bottom: 15px;
 }
+.star { position: fixed; width: 2px; height: 2px; background: white; border-radius: 50%; animation: twinkle ease-in-out infinite; pointer-events: none; z-index: 0; }
 </style>
 
-<!-- Floating orbs -->
 <div class="orb orb1"></div>
 <div class="orb orb2"></div>
 <div class="orb orb3"></div>
 
-<!-- Twinkling stars -->
-<div class="stars">
-    <div class="star" style="top:5%;left:10%;animation-duration:2s;animation-delay:0s;"></div>
-    <div class="star" style="top:15%;left:25%;animation-duration:3s;animation-delay:0.5s;width:3px;height:3px;background:#00d4aa;"></div>
-    <div class="star" style="top:8%;left:45%;animation-duration:2.5s;animation-delay:1s;"></div>
-    <div class="star" style="top:20%;left:65%;animation-duration:4s;animation-delay:0.3s;width:3px;height:3px;background:#0099ff;"></div>
-    <div class="star" style="top:12%;left:80%;animation-duration:2s;animation-delay:1.5s;"></div>
-    <div class="star" style="top:35%;left:5%;animation-duration:3s;animation-delay:0.8s;width:3px;height:3px;background:#c9a84c;"></div>
-    <div class="star" style="top:45%;left:90%;animation-duration:2.5s;animation-delay:0.2s;"></div>
-    <div class="star" style="top:60%;left:15%;animation-duration:3.5s;animation-delay:1.2s;width:3px;height:3px;background:#00d4aa;"></div>
-    <div class="star" style="top:70%;left:35%;animation-duration:2s;animation-delay:0.6s;"></div>
-    <div class="star" style="top:80%;left:55%;animation-duration:4s;animation-delay:0.9s;width:3px;height:3px;background:#0099ff;"></div>
-    <div class="star" style="top:90%;left:75%;animation-duration:2.5s;animation-delay:1.8s;"></div>
-    <div class="star" style="top:25%;left:50%;animation-duration:3s;animation-delay:0.4s;width:3px;height:3px;background:#c9a84c;"></div>
-    <div class="star" style="top:55%;left:70%;animation-duration:2s;animation-delay:1.1s;"></div>
-    <div class="star" style="top:40%;left:40%;animation-duration:3.5s;animation-delay:0.7s;width:3px;height:3px;background:#00d4aa;"></div>
-    <div class="star" style="top:75%;left:88%;animation-duration:2.5s;animation-delay:1.4s;"></div>
-</div>
+<div class="star" style="top:5%;left:10%;animation-duration:2s;"></div>
+<div class="star" style="top:15%;left:25%;animation-duration:3s;animation-delay:0.5s;width:3px;height:3px;background:#00d4aa;"></div>
+<div class="star" style="top:8%;left:45%;animation-duration:2.5s;animation-delay:1s;"></div>
+<div class="star" style="top:20%;left:65%;animation-duration:4s;animation-delay:0.3s;width:3px;height:3px;background:#0099ff;"></div>
+<div class="star" style="top:12%;left:80%;animation-duration:2s;animation-delay:1.5s;"></div>
+<div class="star" style="top:35%;left:5%;animation-duration:3s;animation-delay:0.8s;width:3px;height:3px;background:#c9a84c;"></div>
+<div class="star" style="top:45%;left:90%;animation-duration:2.5s;animation-delay:0.2s;"></div>
+<div class="star" style="top:60%;left:15%;animation-duration:3.5s;animation-delay:1.2s;width:3px;height:3px;background:#00d4aa;"></div>
+<div class="star" style="top:70%;left:35%;animation-duration:2s;animation-delay:0.6s;"></div>
+<div class="star" style="top:80%;left:55%;animation-duration:4s;animation-delay:0.9s;width:3px;height:3px;background:#0099ff;"></div>
+<div class="star" style="top:90%;left:75%;animation-duration:2.5s;animation-delay:1.8s;"></div>
+<div class="star" style="top:25%;left:50%;animation-duration:3s;animation-delay:0.4s;width:3px;height:3px;background:#c9a84c;"></div>
+<div class="star" style="top:55%;left:70%;animation-duration:2s;animation-delay:1.1s;"></div>
+<div class="star" style="top:40%;left:40%;animation-duration:3.5s;animation-delay:0.7s;width:3px;height:3px;background:#00d4aa;"></div>
+<div class="star" style="top:75%;left:88%;animation-duration:2.5s;animation-delay:1.4s;"></div>
 """, unsafe_allow_html=True)
 
 LOGO_SVG = """<svg width="55" height="55" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
@@ -290,21 +157,21 @@ LOGO_BIG = """<svg width="80" height="80" viewBox="0 0 200 200" xmlns="http://ww
   <line x1="132" y1="132" x2="158" y2="158" stroke="url(#g2)" stroke-width="6" stroke-linecap="round"/>
 </svg>"""
 
-page = st.sidebar.radio("Navigation", [" Detect", " History", " About"])
+page = st.sidebar.radio("Navigation", ["🔍 Detect", "📋 History", "ℹ️ About"])
 st.sidebar.markdown("---")
 st.sidebar.markdown(f'<div class="sidebar-logo">{LOGO_SVG}</div>', unsafe_allow_html=True)
 st.sidebar.markdown("<p style='color:#00d4aa; font-weight:700; font-size:17px; margin:5px 0;'>LuminaCheck AI</p>", unsafe_allow_html=True)
 st.sidebar.markdown("<p style='color:#555; font-size:12px; font-style:italic;'>Where Light Reveals Truth</p>", unsafe_allow_html=True)
 st.sidebar.markdown("---")
-st.sidebar.markdown("<p style='color:#8899aa; font-size:13px;'> Welcome to LuminaCheck AI!</p>", unsafe_allow_html=True)
-st.sidebar.markdown("<p style='color:#8899aa; font-size:12px;'> Upload any image to detect if it is REAL or FAKE using advanced AI forensics.</p>", unsafe_allow_html=True)
+st.sidebar.markdown("<p style='color:#8899aa; font-size:13px;'>👋 Welcome to LuminaCheck AI!</p>", unsafe_allow_html=True)
+st.sidebar.markdown("<p style='color:#8899aa; font-size:12px;'>📌 Upload any image to detect if it is REAL or FAKE using advanced AI forensics.</p>", unsafe_allow_html=True)
 st.sidebar.markdown("---")
-st.sidebar.markdown("<p style='color:#333; font-size:11px; text-align:center;'> Powered by Google Gemini AI</p>", unsafe_allow_html=True)
+st.sidebar.markdown("<p style='color:#333; font-size:11px; text-align:center;'>⚡ Powered by Google Gemini AI</p>", unsafe_allow_html=True)
 
 if "history" not in st.session_state:
     st.session_state.history = []
 
-if page == " Detect":
+if page == "🔍 Detect":
     col1, col2 = st.columns([1, 7])
     with col1:
         st.markdown(f'<div class="hero-logo">{LOGO_BIG}</div>', unsafe_allow_html=True)
@@ -312,10 +179,10 @@ if page == " Detect":
         st.title("LuminaCheck AI")
         st.markdown("<p style='color:#8899aa; font-size:16px; margin-top:-10px;'>Advanced AI-Powered Image Authenticity Detection</p>", unsafe_allow_html=True)
         st.markdown("""
-        <span class="tag"> Gemini AI</span>
-        <span class="tag"> Forensic Analysis</span>
-        <span class="tag"> Real-time</span>
-        <span class="tag"> Secure</span>
+        <span class="tag">🤖 Gemini AI</span>
+        <span class="tag">🔬 Forensic Analysis</span>
+        <span class="tag">⚡ Real-time</span>
+        <span class="tag">🛡️ Secure</span>
         """, unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
@@ -332,7 +199,7 @@ if page == " Detect":
         </div>""", unsafe_allow_html=True)
     with c3:
         st.markdown("""<div class="stat-card">
-            <h2 style='color:#c9a84c; font-size:2rem; margin:0;'></h2>
+            <h2 style='color:#c9a84c; font-size:2rem; margin:0;'>⚡</h2>
             <p style='color:#8899aa; margin:5px 0 0 0; font-size:13px;'>Instant Results</p>
         </div>""", unsafe_allow_html=True)
 
@@ -361,13 +228,13 @@ if page == " Detect":
             """, unsafe_allow_html=True)
             st.markdown("<br>", unsafe_allow_html=True)
 
-            if st.button(" Analyze Image Now"):
+            if st.button("🔍 Analyze Image Now"):
                 result_placeholder = st.empty()
                 for msg in [
-                    " Initializing forensic scanner...",
-                    " Loading AI model...",
-                    " Gemini AI analyzing image...",
-                    " Processing results..."
+                    "🔍 Initializing forensic scanner...",
+                    "🧬 Loading AI model...",
+                    "🤖 Gemini AI analyzing image...",
+                    "📊 Processing results..."
                 ]:
                     result_placeholder.markdown(f"""
                     <div style='text-align:center; padding:30px;'>
@@ -395,17 +262,19 @@ Reason: [2-3 specific visual clues]"""
                 if "FAKE" in result.upper() or "AI-GENERATED" in result.upper():
                     verdict = "FAKE/AI-GENERATED"
                     st.markdown(f"""
-                    <div class="verdict-box verdict-fake">
-                        <h2 style='color:#ff3b30; margin:0;'> FAKE / AI-GENERATED</h2>
-                        <p style='color:#8899aa; font-size:14px; margin-top:15px;'>{result}</p>
+                    <div class="verdict-fake">
+                        <div style='font-size:60px; margin-bottom:10px;'>🚨</div>
+                        <div class="verdict-badge-fake">⚠️ FAKE / AI-GENERATED</div>
+                        <p style='color:#ffaa99; font-size:14px; margin-top:15px; line-height:1.7;'>{result}</p>
                     </div>
                     """, unsafe_allow_html=True)
                 else:
                     verdict = "REAL"
                     st.markdown(f"""
-                    <div class="verdict-box verdict-real">
-                        <h2 style='color:#00d4aa; margin:0;'> REAL IMAGE VERIFIED</h2>
-                        <p style='color:#8899aa; font-size:14px; margin-top:15px;'>{result}</p>
+                    <div class="verdict-real">
+                        <div style='font-size:60px; margin-bottom:10px;'>✅</div>
+                        <div class="verdict-badge-real">✅ REAL IMAGE VERIFIED</div>
+                        <p style='color:#99ffee; font-size:14px; margin-top:15px; line-height:1.7;'>{result}</p>
                     </div>
                     """, unsafe_allow_html=True)
 
@@ -416,14 +285,14 @@ Reason: [2-3 specific visual clues]"""
                     "Details": result[:120]
                 })
 
-elif page == " History":
-    st.title(" Detection History")
+elif page == "📋 History":
+    st.title("📋 Detection History")
     st.markdown("---")
     if st.session_state.history:
         df = pd.DataFrame(st.session_state.history)
         st.dataframe(df, use_container_width=True)
         csv = df.to_csv(index=False)
-        st.download_button(" Download Report (CSV)", csv, "lumina_report.csv", "text/csv")
+        st.download_button("📥 Download Report (CSV)", csv, "lumina_report.csv", "text/csv")
     else:
         st.markdown("""
         <div style='text-align:center; padding:50px;'>
@@ -433,7 +302,7 @@ elif page == " History":
         </div>
         """, unsafe_allow_html=True)
 
-elif page == " About":
+elif page == "ℹ️ About":
     col1, col2 = st.columns([1, 8])
     with col1:
         st.markdown(f'<div class="hero-logo">{LOGO_BIG}</div>', unsafe_allow_html=True)
@@ -453,23 +322,23 @@ elif page == " About":
     with c2:
         st.markdown("""
         <div class="stat-card">
-            <h3 style='color:#0099ff;'> Technologies Used</h3>
+            <h3 style='color:#0099ff;'>🛠️ Technologies Used</h3>
             <p style='color:#8899aa; font-size:14px; line-height:1.8;'>
-             Python &nbsp;|&nbsp;  Streamlit<br>
-             Google Gemini AI<br>
-             Pillow &nbsp;|&nbsp;  Pandas<br>
-             Streamlit Cloud
+            🐍 Python &nbsp;|&nbsp; ⚡ Streamlit<br>
+            🤖 Google Gemini AI<br>
+            🖼️ Pillow &nbsp;|&nbsp; 📊 Pandas<br>
+            ☁️ Streamlit Cloud
             </p>
         </div>
         """, unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
     st.markdown("""
     <div class="stat-card" style='text-align:center;'>
-        <h3 style='color:#c9a84c;'> Developed By</h3>
+        <h3 style='color:#c9a84c;'>👩‍💻 Developed By</h3>
         <p style='color:#fff; font-size:20px; font-weight:600;'>Devapriya</p>
         <p style='color:#8899aa;'>BCA Final Year Student | March 2026</p>
         <br>
-        <span class="tag"> luminacheck-ai.streamlit.app</span>
-        <span class="tag"> github.com/codesbydevapriya</span>
+        <span class="tag">🌐 luminacheck-ai.streamlit.app</span>
+        <span class="tag">📂 github.com/codesbydevapriya</span>
     </div>
     """, unsafe_allow_html=True)
