@@ -17,7 +17,7 @@ st.markdown("""
 
 page = st.sidebar.radio("Navigation", ["🔍 Detect", "📋 History", "ℹ️ About"])
 st.sidebar.markdown("---")
-st.sidebar.write("👋 Welcome Devapriya!")
+st.sidebar.write(" 👋 Welcome to LuminaCheck AI!")
 st.sidebar.write("📌 Upload an image and detect if it is REAL or FAKE using AI.")
 
 if "history" not in st.session_state:
