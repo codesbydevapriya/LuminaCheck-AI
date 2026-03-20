@@ -14,30 +14,11 @@ st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 * { font-family: 'Inter', sans-serif; }
-
 .stApp { background: #050a14 !important; }
-
-.stApp::before {
-    content: '';
-    position: fixed;
-    top: 0; left: 0;
-    width: 100%; height: 100%;
-    animation: bgMove 10s ease-in-out infinite alternate;
-    pointer-events: none;
-    z-index: 0;
-}
-
-@keyframes bgMove {
-    0% { background: radial-gradient(ellipse at 20% 50%, rgba(0,212,170,0.08) 0%, transparent 50%), radial-gradient(ellipse at 80% 20%, rgba(0,153,255,0.06) 0%, transparent 50%); }
-    50% { background: radial-gradient(ellipse at 70% 30%, rgba(0,212,170,0.08) 0%, transparent 50%), radial-gradient(ellipse at 20% 70%, rgba(0,153,255,0.06) 0%, transparent 50%); }
-    100% { background: radial-gradient(ellipse at 30% 20%, rgba(0,212,170,0.08) 0%, transparent 50%), radial-gradient(ellipse at 60% 80%, rgba(0,153,255,0.06) 0%, transparent 50%); }
-}
-
 .orb { position: fixed; border-radius: 50%; filter: blur(60px); pointer-events: none; z-index: 0; opacity: 0.15; }
 .orb1 { width: 400px; height: 400px; background: #00d4aa; top: -100px; left: -100px; animation: orbFloat1 15s ease-in-out infinite; }
 .orb2 { width: 300px; height: 300px; background: #0099ff; bottom: -50px; right: -50px; animation: orbFloat2 12s ease-in-out infinite; }
 .orb3 { width: 200px; height: 200px; background: #c9a84c; top: 50%; left: 50%; animation: orbFloat3 18s ease-in-out infinite; }
-
 @keyframes orbFloat1 { 0%, 100% { transform: translate(0,0) scale(1); } 33% { transform: translate(100px,80px) scale(1.1); } 66% { transform: translate(-50px,150px) scale(0.9); } }
 @keyframes orbFloat2 { 0%, 100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-120px,-80px) scale(1.2); } }
 @keyframes orbFloat3 { 0%, 100% { transform: translate(-50%,-50%) scale(1); } 33% { transform: translate(-30%,-70%) scale(1.3); } 66% { transform: translate(-70%,-30%) scale(0.8); } }
@@ -48,13 +29,11 @@ st.markdown("""
 @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 @keyframes redPulse { 0%, 100% { box-shadow: 0 0 30px rgba(255,59,48,0.4); } 50% { box-shadow: 0 0 60px rgba(255,59,48,0.8); } }
 @keyframes greenPulse { 0%, 100% { box-shadow: 0 0 30px rgba(0,212,170,0.4); } 50% { box-shadow: 0 0 60px rgba(0,212,170,0.8); } }
-
 [data-testid="stSidebar"] { background: linear-gradient(180deg, #0d1421 0%, #111827 100%) !important; border-right: 1px solid #1e3a5f; }
 .stButton>button { background: linear-gradient(135deg, #00d4aa, #0099ff) !important; color: white !important; border-radius: 12px !important; padding: 14px 28px !important; font-size: 15px !important; font-weight: 600 !important; border: none !important; box-shadow: 0 0 20px rgba(0,212,170,0.3) !important; transition: all 0.3s ease !important; width: 100% !important; }
 .stButton>button:hover { transform: translateY(-3px) !important; box-shadow: 0 0 35px rgba(0,212,170,0.6) !important; }
 h1 { background: linear-gradient(135deg, #00d4aa, #0099ff, #c9a84c); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size: 2.8rem !important; font-weight: 700 !important; }
 [data-testid="stFileUploader"] { background: #0d1421; border: 2px dashed #1e3a5f; border-radius: 16px; }
-
 .hero-logo { animation: float 3s ease-in-out infinite; display: inline-block; }
 .sidebar-logo { animation: float 4s ease-in-out infinite; }
 .scan-container { position: relative; overflow: hidden; border-radius: 16px; border: 2px solid #00d4aa; animation: glow 2s ease-in-out infinite; }
@@ -62,67 +41,25 @@ h1 { background: linear-gradient(135deg, #00d4aa, #0099ff, #c9a84c); -webkit-bac
 .stat-card:hover { border-color: #00d4aa; transform: translateY(-5px); box-shadow: 0 10px 30px rgba(0,212,170,0.2); }
 .spinning-loader { width: 50px; height: 50px; border: 4px solid #1e3a5f; border-top: 4px solid #00d4aa; border-radius: 50%; animation: rotate 1s linear infinite; margin: 0 auto; }
 .tag { display: inline-block; background: rgba(0,212,170,0.15); border: 1px solid #00d4aa; color: #00d4aa; border-radius: 20px; padding: 4px 12px; font-size: 12px; font-weight: 500; margin: 3px; }
-
-.verdict-real {
-    background: linear-gradient(135deg, rgba(0,212,170,0.2), rgba(0,153,255,0.1));
-    border: 3px solid #00d4aa;
-    border-radius: 20px;
-    padding: 30px;
-    text-align: center;
-    animation: greenPulse 2s ease-in-out infinite, slideIn 0.6s ease-out;
-}
-.verdict-fake {
-    background: linear-gradient(135deg, rgba(255,59,48,0.2), rgba(255,100,50,0.1));
-    border: 3px solid #ff3b30;
-    border-radius: 20px;
-    padding: 30px;
-    text-align: center;
-    animation: redPulse 2s ease-in-out infinite, slideIn 0.6s ease-out;
-}
-.verdict-badge-real {
-    background: #00d4aa;
-    color: #050a14;
-    font-size: 22px;
-    font-weight: 800;
-    padding: 12px 30px;
-    border-radius: 50px;
-    display: inline-block;
-    letter-spacing: 2px;
-    margin-bottom: 15px;
-}
-.verdict-badge-fake {
-    background: #ff3b30;
-    color: white;
-    font-size: 22px;
-    font-weight: 800;
-    padding: 12px 30px;
-    border-radius: 50px;
-    display: inline-block;
-    letter-spacing: 2px;
-    margin-bottom: 15px;
-}
+.verdict-real { background: linear-gradient(135deg, rgba(0,212,170,0.2), rgba(0,153,255,0.1)); border: 3px solid #00d4aa; border-radius: 20px; padding: 30px; text-align: center; animation: greenPulse 2s ease-in-out infinite, slideIn 0.6s ease-out; }
+.verdict-fake { background: linear-gradient(135deg, rgba(255,59,48,0.2), rgba(255,100,50,0.1)); border: 3px solid #ff3b30; border-radius: 20px; padding: 30px; text-align: center; animation: redPulse 2s ease-in-out infinite, slideIn 0.6s ease-out; }
+.verdict-badge-real { background: #00d4aa; color: #050a14; font-size: 22px; font-weight: 800; padding: 12px 30px; border-radius: 50px; display: inline-block; letter-spacing: 2px; margin-bottom: 15px; }
+.verdict-badge-fake { background: #ff3b30; color: white; font-size: 22px; font-weight: 800; padding: 12px 30px; border-radius: 50px; display: inline-block; letter-spacing: 2px; margin-bottom: 15px; }
 .star { position: fixed; width: 2px; height: 2px; background: white; border-radius: 50%; animation: twinkle ease-in-out infinite; pointer-events: none; z-index: 0; }
+.chat-msg-user { background: linear-gradient(135deg, #00d4aa, #0099ff); color: #050a14; border-radius: 18px 18px 4px 18px; padding: 10px 14px; margin: 6px 0; font-size: 13px; font-weight: 500; }
+.chat-msg-ai { background: rgba(13,20,33,0.9); border: 1px solid #1e3a5f; color: #e0e0e0; border-radius: 18px 18px 18px 4px; padding: 10px 14px; margin: 6px 0; font-size: 13px; line-height: 1.6; }
 </style>
 
 <div class="orb orb1"></div>
 <div class="orb orb2"></div>
 <div class="orb orb3"></div>
-
 <div class="star" style="top:5%;left:10%;animation-duration:2s;"></div>
 <div class="star" style="top:15%;left:25%;animation-duration:3s;animation-delay:0.5s;width:3px;height:3px;background:#00d4aa;"></div>
 <div class="star" style="top:8%;left:45%;animation-duration:2.5s;animation-delay:1s;"></div>
 <div class="star" style="top:20%;left:65%;animation-duration:4s;animation-delay:0.3s;width:3px;height:3px;background:#0099ff;"></div>
-<div class="star" style="top:12%;left:80%;animation-duration:2s;animation-delay:1.5s;"></div>
 <div class="star" style="top:35%;left:5%;animation-duration:3s;animation-delay:0.8s;width:3px;height:3px;background:#c9a84c;"></div>
-<div class="star" style="top:45%;left:90%;animation-duration:2.5s;animation-delay:0.2s;"></div>
 <div class="star" style="top:60%;left:15%;animation-duration:3.5s;animation-delay:1.2s;width:3px;height:3px;background:#00d4aa;"></div>
-<div class="star" style="top:70%;left:35%;animation-duration:2s;animation-delay:0.6s;"></div>
 <div class="star" style="top:80%;left:55%;animation-duration:4s;animation-delay:0.9s;width:3px;height:3px;background:#0099ff;"></div>
-<div class="star" style="top:90%;left:75%;animation-duration:2.5s;animation-delay:1.8s;"></div>
-<div class="star" style="top:25%;left:50%;animation-duration:3s;animation-delay:0.4s;width:3px;height:3px;background:#c9a84c;"></div>
-<div class="star" style="top:55%;left:70%;animation-duration:2s;animation-delay:1.1s;"></div>
-<div class="star" style="top:40%;left:40%;animation-duration:3.5s;animation-delay:0.7s;width:3px;height:3px;background:#00d4aa;"></div>
-<div class="star" style="top:75%;left:88%;animation-duration:2.5s;animation-delay:1.4s;"></div>
 """, unsafe_allow_html=True)
 
 LOGO_SVG = """<svg width="55" height="55" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
@@ -164,7 +101,44 @@ st.sidebar.markdown("<p style='color:#00d4aa; font-weight:700; font-size:17px; m
 st.sidebar.markdown("<p style='color:#555; font-size:12px; font-style:italic;'>Where Light Reveals Truth</p>", unsafe_allow_html=True)
 st.sidebar.markdown("---")
 st.sidebar.markdown("<p style='color:#8899aa; font-size:13px;'>👋 Welcome to LuminaCheck AI!</p>", unsafe_allow_html=True)
-st.sidebar.markdown("<p style='color:#8899aa; font-size:12px;'>📌 Upload any image to detect if it is REAL or FAKE using advanced AI forensics.</p>", unsafe_allow_html=True)
+st.sidebar.markdown("<p style='color:#8899aa; font-size:12px;'>📌 Upload any image to detect if it is REAL or FAKE.</p>", unsafe_allow_html=True)
+
+# ── Sidebar Chatbot ──────────────────────────────────────
+st.sidebar.markdown("---")
+st.sidebar.markdown("<p style='color:#00d4aa; font-weight:700; font-size:15px;'>💬 AI Assistant</p>", unsafe_allow_html=True)
+
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+
+# Show last 4 messages
+if st.session_state.chat_history:
+    for msg in st.session_state.chat_history[-4:]:
+        if msg["role"] == "user":
+            st.sidebar.markdown(f"<div class='chat-msg-user'>👤 {msg['content']}</div>", unsafe_allow_html=True)
+        else:
+            st.sidebar.markdown(f"<div class='chat-msg-ai'>🤖 {msg['content']}</div>", unsafe_allow_html=True)
+else:
+    st.sidebar.markdown("<p style='color:#555; font-size:12px;'>Ask me anything about image detection!</p>", unsafe_allow_html=True)
+
+chat_input = st.sidebar.text_input("", placeholder="Type your question...", key="sidebar_chat", label_visibility="collapsed")
+
+col1, col2 = st.sidebar.columns([2, 1])
+with col1:
+    send_btn = st.sidebar.button("Send 🚀", key="send_chat")
+with col2:
+    if st.sidebar.button("Clear", key="clear_chat"):
+        st.session_state.chat_history = []
+        st.rerun()
+
+if send_btn and chat_input:
+    st.session_state.chat_history.append({"role": "user", "content": chat_input})
+    model = genai.GenerativeModel("gemini-2.5-flash")
+    response = model.generate_content(f"""You are LuminaCheck AI Assistant, expert in image forensics and deepfake detection.
+Answer in 1-2 short sentences only.
+Question: {chat_input}""")
+    st.session_state.chat_history.append({"role": "assistant", "content": response.text})
+    st.rerun()
+
 st.sidebar.markdown("---")
 st.sidebar.markdown("<p style='color:#333; font-size:11px; text-align:center;'>⚡ Powered by Google Gemini AI</p>", unsafe_allow_html=True)
 
