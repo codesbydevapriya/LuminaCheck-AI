@@ -1,4 +1,4 @@
-# 🔍 LuminaCheck AI
+#  LuminaCheck AI
 ### Where Light Reveals Truth
 
 ![Python](https://img.shields.io/badge/Python-3.11-blue?style=for-the-badge&logo=python)
@@ -10,27 +10,27 @@
 
 ---
 
-## 🌐 Live Demo
-👉 **[https://luminacheck-ai.streamlit.app](https://luminacheck-ai.streamlit.app)**
+##  Live Demo
+ **[https://luminacheck-ai.streamlit.app](https://luminacheck-ai.streamlit.app)**
 
 ---
 
-## 🎯 Features
+##  Features
 
 | Feature | Description |
 |---------|-------------|
-| 🔍 AI Detection | Detects REAL, FAKE, or AI-GENERATED images |
-| 🎯 Confidence Score | 0-100% confidence percentage |
-| 📝 Detailed Reasoning | 2-3 specific visual clues |
-| 📋 Detection History | Session-based history table |
-| 📥 CSV Download | Download detection report |
-| 💬 AI Chatbot | Sidebar AI assistant |
-| 🎨 Dark UI | Professional animated interface |
-| 📱 Responsive | Works on mobile & desktop |
+|  AI Detection | Detects REAL, FAKE, or AI-GENERATED images |
+|  Confidence Score | 0-100% confidence percentage |
+|  Detailed Reasoning | 2-3 specific visual clues |
+|  Detection History | Session-based history table |
+|  CSV Download | Download detection report |
+|  AI Chatbot | Sidebar AI assistant |
+|  Dark UI | Professional animated interface |
+|  Responsive | Works on mobile & desktop |
 
 ---
 
-## 🛠️ Tech Stack
+##  Tech Stack
 
 - **Python** — Core programming language
 - **Streamlit** — Web application framework  
@@ -41,7 +41,7 @@
 
 ---
 
-## 🚀 Run Locally
+##  Run Locally
 ```bash
 # Clone the repository
 git clone https://github.com/codesbydevapriya/LuminaCheck-AI.git
@@ -58,7 +58,7 @@ streamlit run app.py
 
 ---
 
-## 📁 Project Structure
+##  Project Structure
 ```
 LuminaCheck-AI/
 ├── app.py              # Main application
@@ -68,7 +68,7 @@ LuminaCheck-AI/
 
 ---
 
-## 🔑 Environment Variables
+##  Environment Variables
 
 | Variable | Description |
 |----------|-------------|
@@ -78,16 +78,16 @@ Get your free API key at [aistudio.google.com](https://aistudio.google.com)
 
 ---
 
-## 📊 How It Works
+##  How It Works
 
 1. **Upload** any JPG/JPEG/PNG image
 2. **Click** "Analyze Image Now"
 3. **AI scans** for forensic clues
-4. **Get verdict** — REAL ✅ or FAKE 🚨
+4. **Get verdict** — REAL  or FAKE 
 
 ---
 
-## ⚠️ Limitations
+##  Limitations
 
 - Ultra-realistic AI images may occasionally be misclassified
 - Free tier API has rate limits
@@ -95,7 +95,7 @@ Get your free API key at [aistudio.google.com](https://aistudio.google.com)
 
 ---
 
-## 🔮 Future Scope
+##  Future Scope
 
 - Custom CNN model for higher accuracy
 - Video deepfake detection
@@ -104,16 +104,16 @@ Get your free API key at [aistudio.google.com](https://aistudio.google.com)
 
 ---
 
-## 👩‍💻 Developer
+##  Developer
 
 **Devapriya** — BCA Final Year Student | March 2026
 
 ---
 
-## 📄 License
+##  License
 
 This project is licensed under the MIT License.
 
 ---
 
-<p align="center">Made with ❤️ by Devapriya | Powered by Google Gemini AI</p>
+<p align="center">Made by Devapriya | Powered by Google Gemini AI</p>
