@@ -290,21 +290,21 @@ LOGO_BIG = """<svg width="80" height="80" viewBox="0 0 200 200" xmlns="http://ww
   <line x1="132" y1="132" x2="158" y2="158" stroke="url(#g2)" stroke-width="6" stroke-linecap="round"/>
 </svg>"""
 
-page = st.sidebar.radio("Navigation", ["🔍 Detect", "📋 History", "ℹ️ About"])
+page = st.sidebar.radio("Navigation", [" Detect", " History", " About"])
 st.sidebar.markdown("---")
 st.sidebar.markdown(f'<div class="sidebar-logo">{LOGO_SVG}</div>', unsafe_allow_html=True)
 st.sidebar.markdown("<p style='color:#00d4aa; font-weight:700; font-size:17px; margin:5px 0;'>LuminaCheck AI</p>", unsafe_allow_html=True)
 st.sidebar.markdown("<p style='color:#555; font-size:12px; font-style:italic;'>Where Light Reveals Truth</p>", unsafe_allow_html=True)
 st.sidebar.markdown("---")
-st.sidebar.markdown("<p style='color:#8899aa; font-size:13px;'>👋 Welcome to LuminaCheck AI!</p>", unsafe_allow_html=True)
-st.sidebar.markdown("<p style='color:#8899aa; font-size:12px;'>📌 Upload any image to detect if it is REAL or FAKE using advanced AI forensics.</p>", unsafe_allow_html=True)
+st.sidebar.markdown("<p style='color:#8899aa; font-size:13px;'> Welcome to LuminaCheck AI!</p>", unsafe_allow_html=True)
+st.sidebar.markdown("<p style='color:#8899aa; font-size:12px;'> Upload any image to detect if it is REAL or FAKE using advanced AI forensics.</p>", unsafe_allow_html=True)
 st.sidebar.markdown("---")
-st.sidebar.markdown("<p style='color:#333; font-size:11px; text-align:center;'>⚡ Powered by Google Gemini AI</p>", unsafe_allow_html=True)
+st.sidebar.markdown("<p style='color:#333; font-size:11px; text-align:center;'> Powered by Google Gemini AI</p>", unsafe_allow_html=True)
 
 if "history" not in st.session_state:
     st.session_state.history = []
 
-if page == "🔍 Detect":
+if page == " Detect":
     col1, col2 = st.columns([1, 7])
     with col1:
         st.markdown(f'<div class="hero-logo">{LOGO_BIG}</div>', unsafe_allow_html=True)
@@ -332,7 +332,7 @@ if page == "🔍 Detect":
         </div>""", unsafe_allow_html=True)
     with c3:
         st.markdown("""<div class="stat-card">
-            <h2 style='color:#c9a84c; font-size:2rem; margin:0;'>⚡</h2>
+            <h2 style='color:#c9a84c; font-size:2rem; margin:0;'></h2>
             <p style='color:#8899aa; margin:5px 0 0 0; font-size:13px;'>Instant Results</p>
         </div>""", unsafe_allow_html=True)
 
@@ -361,13 +361,13 @@ if page == "🔍 Detect":
             """, unsafe_allow_html=True)
             st.markdown("<br>", unsafe_allow_html=True)
 
-            if st.button("🔍 Analyze Image Now"):
+            if st.button(" Analyze Image Now"):
                 result_placeholder = st.empty()
                 for msg in [
-                    "🔍 Initializing forensic scanner...",
-                    "🧬 Loading AI model...",
-                    "🤖 Gemini AI analyzing image...",
-                    "📊 Processing results..."
+                    " Initializing forensic scanner...",
+                    " Loading AI model...",
+                    " Gemini AI analyzing image...",
+                    " Processing results..."
                 ]:
                     result_placeholder.markdown(f"""
                     <div style='text-align:center; padding:30px;'>
@@ -396,7 +396,7 @@ Reason: [2-3 specific visual clues]"""
                     verdict = "FAKE/AI-GENERATED"
                     st.markdown(f"""
                     <div class="verdict-box verdict-fake">
-                        <h2 style='color:#ff3b30; margin:0;'>⚠️ FAKE / AI-GENERATED</h2>
+                        <h2 style='color:#ff3b30; margin:0;'> FAKE / AI-GENERATED</h2>
                         <p style='color:#8899aa; font-size:14px; margin-top:15px;'>{result}</p>
                     </div>
                     """, unsafe_allow_html=True)
@@ -404,7 +404,7 @@ Reason: [2-3 specific visual clues]"""
                     verdict = "REAL"
                     st.markdown(f"""
                     <div class="verdict-box verdict-real">
-                        <h2 style='color:#00d4aa; margin:0;'>✅ REAL IMAGE VERIFIED</h2>
+                        <h2 style='color:#00d4aa; margin:0;'> REAL IMAGE VERIFIED</h2>
                         <p style='color:#8899aa; font-size:14px; margin-top:15px;'>{result}</p>
                     </div>
                     """, unsafe_allow_html=True)
@@ -416,14 +416,14 @@ Reason: [2-3 specific visual clues]"""
                     "Details": result[:120]
                 })
 
-elif page == "📋 History":
-    st.title("📋 Detection History")
+elif page == " History":
+    st.title(" Detection History")
     st.markdown("---")
     if st.session_state.history:
         df = pd.DataFrame(st.session_state.history)
         st.dataframe(df, use_container_width=True)
         csv = df.to_csv(index=False)
-        st.download_button("📥 Download Report (CSV)", csv, "lumina_report.csv", "text/csv")
+        st.download_button(" Download Report (CSV)", csv, "lumina_report.csv", "text/csv")
     else:
         st.markdown("""
         <div style='text-align:center; padding:50px;'>
@@ -433,7 +433,7 @@ elif page == "📋 History":
         </div>
         """, unsafe_allow_html=True)
 
-elif page == "ℹ️ About":
+elif page == " About":
     col1, col2 = st.columns([1, 8])
     with col1:
         st.markdown(f'<div class="hero-logo">{LOGO_BIG}</div>', unsafe_allow_html=True)
@@ -453,23 +453,23 @@ elif page == "ℹ️ About":
     with c2:
         st.markdown("""
         <div class="stat-card">
-            <h3 style='color:#0099ff;'>🛠️ Technologies Used</h3>
+            <h3 style='color:#0099ff;'> Technologies Used</h3>
             <p style='color:#8899aa; font-size:14px; line-height:1.8;'>
-            🐍 Python &nbsp;|&nbsp; ⚡ Streamlit<br>
-            🤖 Google Gemini AI<br>
-            🖼️ Pillow &nbsp;|&nbsp; 📊 Pandas<br>
-            ☁️ Streamlit Cloud
+             Python &nbsp;|&nbsp;  Streamlit<br>
+             Google Gemini AI<br>
+             Pillow &nbsp;|&nbsp;  Pandas<br>
+             Streamlit Cloud
             </p>
         </div>
         """, unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
     st.markdown("""
     <div class="stat-card" style='text-align:center;'>
-        <h3 style='color:#c9a84c;'>👩‍💻 Developed By</h3>
+        <h3 style='color:#c9a84c;'> Developed By</h3>
         <p style='color:#fff; font-size:20px; font-weight:600;'>Devapriya</p>
         <p style='color:#8899aa;'>BCA Final Year Student | March 2026</p>
         <br>
-        <span class="tag">🌐 luminacheck-ai.streamlit.app</span>
-        <span class="tag">📂 github.com/codesbydevapriya</span>
+        <span class="tag"> luminacheck-ai.streamlit.app</span>
+        <span class="tag"> github.com/codesbydevapriya</span>
     </div>
     """, unsafe_allow_html=True)
