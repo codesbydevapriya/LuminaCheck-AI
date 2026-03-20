@@ -112,3 +112,101 @@ if page == "🔍 Detect":
 
     if uploaded_file is not None:
         col1, col2 = st.columns([1, 1])
+        with col1:
+            image = Image.open(uploaded_file)
+            st.image(image, caption="📸 Uploaded Image", use_container_width=True)
+        with col2:
+            st.markdown("<br><br>", unsafe_allow_html=True)
+            st.success("✅ Image uploaded successfully!")
+            st.markdown(f"**File:** {uploaded_file.name}")
+            st.markdown(f"**Size:** {uploaded_file.size / 1024:.1f} KB")
+            st.markdown("<br>", unsafe_allow_html=True)
+
+            if st.button("🔍 Analyze Image Now"):
+                progress_bar = st.progress(0)
+                status = st.empty()
+
+                status.markdown("<div class='scanning-text'>🔍 Initializing AI Scanner...</div>", unsafe_allow_html=True)
+                for i in range(30):
+                    time.sleep(0.03)
+                    progress_bar.progress(i)
+
+                status.markdown("<div class='scanning-text'>🤖 Gemini AI Analyzing Image...</div>", unsafe_allow_html=True)
+
+                model = genai.GenerativeModel("gemini-2.5-flash")
+                response = model.generate_content([
+                    image,
+                    """You are a forensic image authentication expert.
+Analyze this image and determine if it is REAL or AI-GENERATED/FAKE.
+Check for: unnatural skin, perfect symmetry, distorted hands, impossible lighting, overly perfect features, fake background blur.
+Be strict but fair. Only say REAL if 100% sure it is a genuine photograph.
+Reply ONLY in this exact format:
+Verdict: [REAL or AI-GENERATED or FAKE]
+Confidence: [0-100%]
+Reason: [2-3 specific visual clues]"""
+                ])
+
+                for i in range(30, 100):
+                    time.sleep(0.02)
+                    progress_bar.progress(i)
+
+                status.markdown("<div class='scanning-text'>✅ Analysis Complete!</div>", unsafe_allow_html=True)
+                progress_bar.progress(100)
+                time.sleep(0.5)
+                progress_bar.empty()
+                status.empty()
+
+                result = response.text
+                st.markdown("---")
+                st.subheader("🧠 AI Detection Result")
+
+                if "FAKE" in result.upper() or "AI-GENERATED" in result.upper():
+                    st.error(f"⚠️ **FAKE / AI-GENERATED DETECTED**\n\n{result}")
+                    verdict = "FAKE/AI-GENERATED"
+                else:
+                    st.success(f"✅ **REAL IMAGE VERIFIED**\n\n{result}")
+                    verdict = "REAL"
+
+                st.session_state.history.append({
+                    "Time": datetime.now().strftime("%H:%M:%S"),
+                    "File": uploaded_file.name,
+                    "Result": verdict,
+                    "Details": result[:120]
+                })
+
+elif page == "📋 History":
+    st.title("📋 Detection History")
+    st.markdown("---")
+    if st.session_state.history:
+        df = pd.DataFrame(st.session_state.history)
+        st.dataframe(df, use_container_width=True)
+        csv = df.to_csv(index=False)
+        st.download_button("📥 Download Report (CSV)", csv, "lumina_report.csv", "text/csv")
+    else:
+        st.info("📭 No detections yet. Go to Detect page and upload an image!")
+
+elif page == "ℹ️ About":
+    col1, col2 = st.columns([1, 8])
+    with col1:
+        st.markdown(LOGO_SVG, unsafe_allow_html=True)
+    with col2:
+        st.title("About LuminaCheck AI")
+    st.markdown("---")
+    st.markdown("""
+    ## 🔍 What is LuminaCheck AI?
+    LuminaCheck AI is a **Final Year BCA Project** that uses **Google Gemini AI** to detect whether an image is **REAL**, **FAKE**, or **AI-GENERATED**.
+
+    ## 🛠️ Technologies Used
+    - **Python** — Core programming language
+    - **Streamlit** — Web application framework
+    - **Google Gemini AI** — Image analysis engine
+    - **Pillow** — Image processing
+    - **Pandas** — Data management
+
+    ## 🌐 Live Links
+    - **App:** https://luminacheck-ai.streamlit.app
+    - **GitHub:** https://github.com/codesbydevapriya/LuminaCheck-AI
+
+    ## 👩‍💻 Developed By
+    **Devapriya** — BCA Final Year Student | March 2026
+    """)
