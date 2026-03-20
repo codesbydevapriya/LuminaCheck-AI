@@ -94,18 +94,18 @@ LOGO_BIG = """<svg width="80" height="80" viewBox="0 0 200 200" xmlns="http://ww
   <line x1="132" y1="132" x2="158" y2="158" stroke="url(#g2)" stroke-width="6" stroke-linecap="round"/>
 </svg>"""
 
-page = st.sidebar.radio("Navigation", ["🔍 Detect", "📋 History", "ℹ️ About"])
+page = st.sidebar.radio("Navigation", [" Detect", " History", " About"])
 st.sidebar.markdown("---")
 st.sidebar.markdown(f'<div class="sidebar-logo">{LOGO_SVG}</div>', unsafe_allow_html=True)
 st.sidebar.markdown("<p style='color:#00d4aa; font-weight:700; font-size:17px; margin:5px 0;'>LuminaCheck AI</p>", unsafe_allow_html=True)
 st.sidebar.markdown("<p style='color:#555; font-size:12px; font-style:italic;'>Where Light Reveals Truth</p>", unsafe_allow_html=True)
 st.sidebar.markdown("---")
-st.sidebar.markdown("<p style='color:#8899aa; font-size:13px;'>👋 Welcome to LuminaCheck AI!</p>", unsafe_allow_html=True)
-st.sidebar.markdown("<p style='color:#8899aa; font-size:12px;'>📌 Upload any image to detect if it is REAL or FAKE.</p>", unsafe_allow_html=True)
+st.sidebar.markdown("<p style='color:#8899aa; font-size:13px;'> Welcome to LuminaCheck AI!</p>", unsafe_allow_html=True)
+st.sidebar.markdown("<p style='color:#8899aa; font-size:12px;'> Upload any image to detect if it is REAL or FAKE.</p>", unsafe_allow_html=True)
 
 # ── Sidebar Chatbot ──────────────────────────────────────
 st.sidebar.markdown("---")
-st.sidebar.markdown("<p style='color:#00d4aa; font-weight:700; font-size:15px;'>💬 AI Assistant</p>", unsafe_allow_html=True)
+st.sidebar.markdown("<p style='color:#00d4aa; font-weight:700; font-size:15px;'> AI Assistant</p>", unsafe_allow_html=True)
 
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
@@ -114,9 +114,9 @@ if "chat_history" not in st.session_state:
 if st.session_state.chat_history:
     for msg in st.session_state.chat_history[-4:]:
         if msg["role"] == "user":
-            st.sidebar.markdown(f"<div class='chat-msg-user'>👤 {msg['content']}</div>", unsafe_allow_html=True)
+            st.sidebar.markdown(f"<div class='chat-msg-user'> {msg['content']}</div>", unsafe_allow_html=True)
         else:
-            st.sidebar.markdown(f"<div class='chat-msg-ai'>🤖 {msg['content']}</div>", unsafe_allow_html=True)
+            st.sidebar.markdown(f"<div class='chat-msg-ai'> {msg['content']}</div>", unsafe_allow_html=True)
 else:
     st.sidebar.markdown("<p style='color:#555; font-size:12px;'>Ask me anything about image detection!</p>", unsafe_allow_html=True)
 
@@ -124,7 +124,7 @@ chat_input = st.sidebar.text_input("", placeholder="Type your question...", key=
 
 col1, col2 = st.sidebar.columns([2, 1])
 with col1:
-    send_btn = st.sidebar.button("Send 🚀", key="send_chat")
+    send_btn = st.sidebar.button("Send ", key="send_chat")
 with col2:
     if st.sidebar.button("Clear", key="clear_chat"):
         st.session_state.chat_history = []
@@ -140,12 +140,12 @@ Question: {chat_input}""")
     st.rerun()
 
 st.sidebar.markdown("---")
-st.sidebar.markdown("<p style='color:#333; font-size:11px; text-align:center;'>⚡ Powered by Google Gemini AI</p>", unsafe_allow_html=True)
+st.sidebar.markdown("<p style='color:#333; font-size:11px; text-align:center;'> Powered by Google Gemini AI</p>", unsafe_allow_html=True)
 
 if "history" not in st.session_state:
     st.session_state.history = []
 
-if page == "🔍 Detect":
+if page == " Detect":
     col1, col2 = st.columns([1, 7])
     with col1:
         st.markdown(f'<div class="hero-logo">{LOGO_BIG}</div>', unsafe_allow_html=True)
@@ -153,10 +153,10 @@ if page == "🔍 Detect":
         st.title("LuminaCheck AI")
         st.markdown("<p style='color:#8899aa; font-size:16px; margin-top:-10px;'>Advanced AI-Powered Image Authenticity Detection</p>", unsafe_allow_html=True)
         st.markdown("""
-        <span class="tag">🤖 Gemini AI</span>
-        <span class="tag">🔬 Forensic Analysis</span>
-        <span class="tag">⚡ Real-time</span>
-        <span class="tag">🛡️ Secure</span>
+        <span class="tag"> Gemini AI</span>
+        <span class="tag"> Forensic Analysis</span>
+        <span class="tag"> Real-time</span>
+        <span class="tag"> Secure</span>
         """, unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
@@ -178,7 +178,7 @@ if page == "🔍 Detect":
         </div>""", unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown("<p style='color:#8899aa; font-size:14px;'>📤 Upload Image</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#8899aa; font-size:14px;'> Upload Image</p>", unsafe_allow_html=True)
     uploaded_file = st.file_uploader("", type=["jpg", "jpeg", "png"], label_visibility="collapsed")
 
     if uploaded_file is not None:
@@ -193,22 +193,22 @@ if page == "🔍 Detect":
             st.markdown("<br>", unsafe_allow_html=True)
             st.markdown(f"""
             <div class="stat-card">
-                <p style='color:#00d4aa; font-weight:600; font-size:15px; margin:0;'>📁 File Details</p>
+                <p style='color:#00d4aa; font-weight:600; font-size:15px; margin:0;'> File Details</p>
                 <hr style='border-color:#1e3a5f; margin:10px 0;'>
-                <p style='color:#8899aa; font-size:13px; margin:5px 0;'>📄 <b style='color:#fff;'>{uploaded_file.name}</b></p>
-                <p style='color:#8899aa; font-size:13px; margin:5px 0;'>💾 Size: <b style='color:#fff;'>{uploaded_file.size / 1024:.1f} KB</b></p>
-                <p style='color:#00d4aa; font-size:13px; margin:5px 0;'>✅ Ready for analysis</p>
+                <p style='color:#8899aa; font-size:13px; margin:5px 0;'> <b style='color:#fff;'>{uploaded_file.name}</b></p>
+                <p style='color:#8899aa; font-size:13px; margin:5px 0;'> Size: <b style='color:#fff;'>{uploaded_file.size / 1024:.1f} KB</b></p>
+                <p style='color:#00d4aa; font-size:13px; margin:5px 0;'> Ready for analysis</p>
             </div>
             """, unsafe_allow_html=True)
             st.markdown("<br>", unsafe_allow_html=True)
 
-            if st.button("🔍 Analyze Image Now"):
+            if st.button(" Analyze Image Now"):
                 result_placeholder = st.empty()
                 for msg in [
-                    "🔍 Initializing forensic scanner...",
-                    "🧬 Loading AI model...",
-                    "🤖 Gemini AI analyzing image...",
-                    "📊 Processing results..."
+                    " Initializing forensic scanner...",
+                    " Loading AI model...",
+                    " Gemini AI analyzing image...",
+                    " Processing results..."
                 ]:
                     result_placeholder.markdown(f"""
                     <div style='text-align:center; padding:30px;'>
@@ -259,24 +259,24 @@ Reason: [2-3 specific visual clues]"""
                     "Details": result[:120]
                 })
 
-elif page == "📋 History":
-    st.title("📋 Detection History")
+elif page == " History":
+    st.title(" Detection History")
     st.markdown("---")
     if st.session_state.history:
         df = pd.DataFrame(st.session_state.history)
         st.dataframe(df, use_container_width=True)
         csv = df.to_csv(index=False)
-        st.download_button("📥 Download Report (CSV)", csv, "lumina_report.csv", "text/csv")
+        st.download_button(" Download Report (CSV)", csv, "lumina_report.csv", "text/csv")
     else:
         st.markdown("""
         <div style='text-align:center; padding:50px;'>
-            <p style='font-size:50px;'>📭</p>
+            <p style='font-size:50px;'></p>
             <p style='color:#8899aa; font-size:18px;'>No detections yet</p>
             <p style='color:#555; font-size:14px;'>Go to Detect page and upload an image!</p>
         </div>
         """, unsafe_allow_html=True)
 
-elif page == "ℹ️ About":
+elif page == " About":
     col1, col2 = st.columns([1, 8])
     with col1:
         st.markdown(f'<div class="hero-logo">{LOGO_BIG}</div>', unsafe_allow_html=True)
@@ -287,7 +287,7 @@ elif page == "ℹ️ About":
     with c1:
         st.markdown("""
         <div class="stat-card">
-            <h3 style='color:#00d4aa;'>🔍 What is LuminaCheck AI?</h3>
+            <h3 style='color:#00d4aa;'> What is LuminaCheck AI?</h3>
             <p style='color:#8899aa; font-size:14px; line-height:1.7;'>
             LuminaCheck AI is a Final Year BCA Project that uses Google Gemini Vision AI to detect whether a digital image is REAL, FAKE, or AI-GENERATED.
             </p>
@@ -298,21 +298,21 @@ elif page == "ℹ️ About":
         <div class="stat-card">
             <h3 style='color:#0099ff;'>🛠️ Technologies Used</h3>
             <p style='color:#8899aa; font-size:14px; line-height:1.8;'>
-            🐍 Python &nbsp;|&nbsp; ⚡ Streamlit<br>
-            🤖 Google Gemini AI<br>
-            🖼️ Pillow &nbsp;|&nbsp; 📊 Pandas<br>
-            ☁️ Streamlit Cloud
+             Python &nbsp;|&nbsp; ⚡ Streamlit<br>
+             Google Gemini AI<br>
+             Pillow &nbsp;|&nbsp;  Pandas<br>
+             Streamlit Cloud
             </p>
         </div>
         """, unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
     st.markdown("""
     <div class="stat-card" style='text-align:center;'>
-        <h3 style='color:#c9a84c;'>👩‍💻 Developed By</h3>
+        <h3 style='color:#c9a84c;'> Developed By</h3>
         <p style='color:#fff; font-size:20px; font-weight:600;'>Devapriya</p>
         <p style='color:#8899aa;'>BCA Final Year Student | March 2026</p>
         <br>
-        <span class="tag">🌐 luminacheck-ai.streamlit.app</span>
-        <span class="tag">📂 github.com/codesbydevapriya</span>
+        <span class="tag"> luminacheck-ai.streamlit.app</span>
+        <span class="tag"> github.com/codesbydevapriya</span>
     </div>
     """, unsafe_allow_html=True)
