@@ -9,6 +9,18 @@ genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
 
 st.set_page_config(page_title="LuminaCheck AI", page_icon="🔍", layout="wide")
 
+LOGO_SVG = """
+<svg width="60" height="60" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="90" cy="90" r="70" fill="#1a1a2e"/>
+  <circle cx="90" cy="90" r="70" fill="none" stroke="#c9a84c" stroke-width="6"/>
+  <ellipse cx="90" cy="90" rx="30" ry="30" fill="#c9a84c"/>
+  <ellipse cx="90" cy="90" rx="18" ry="18" fill="#1a1a2e"/>
+  <ellipse cx="90" cy="90" rx="9" ry="9" fill="#c9a84c" opacity="0.6"/>
+  <circle cx="98" cy="82" r="5" fill="white" opacity="0.9"/>
+  <line x1="130" y1="130" x2="155" y2="155" stroke="#c9a84c" stroke-width="10" stroke-linecap="round"/>
+</svg>
+"""
+
 st.markdown("""
     <style>
     .stButton>button { background-color: #4CAF50; color: white; border-radius: 10px; padding: 10px 24px; font-size: 16px; }
@@ -17,15 +29,20 @@ st.markdown("""
 
 page = st.sidebar.radio("Navigation", ["🔍 Detect", "📋 History", "ℹ️ About"])
 st.sidebar.markdown("---")
-st.sidebar.write(" 👋 Welcome to LuminaCheck AI!")
+st.sidebar.markdown(LOGO_SVG, unsafe_allow_html=True)
+st.sidebar.write("👋 Welcome to LuminaCheck AI!")
 st.sidebar.write("📌 Upload an image and detect if it is REAL or FAKE using AI.")
 
 if "history" not in st.session_state:
     st.session_state.history = []
 
 if page == "🔍 Detect":
-    st.title("🔍 LuminaCheck AI")
-    st.subheader("Where Light Reveals Truth")
+    col1, col2 = st.columns([1, 8])
+    with col1:
+        st.markdown(LOGO_SVG, unsafe_allow_html=True)
+    with col2:
+        st.title("🔍 LuminaCheck AI")
+        st.subheader("Where Light Reveals Truth")
     st.markdown("---")
     uploaded_file = st.file_uploader("📤 Upload an Image", type=["jpg", "jpeg", "png"])
 
@@ -41,18 +58,8 @@ if page == "🔍 Detect":
                     image,
                     """You are a forensic image authentication expert.
 Analyze this image and determine if it is REAL or AI-GENERATED/FAKE.
-
-Check for these signs of AI generation:
-1. Unnatural or overly smooth skin texture
-2. Perfect symmetry in faces
-3. Distorted or extra fingers/hands
-4. Impossible or inconsistent lighting
-5. Overly perfect hair or clothing
-6. Blurred or inconsistent backgrounds
-7. Text or numbers that look slightly wrong
-
-Be strict but fair. Give your honest assessment.
-
+Check for: unnatural skin, perfect symmetry, distorted hands, impossible lighting, overly perfect features, fake background blur.
+Be strict but fair.
 Reply ONLY in this exact format:
 Verdict: [REAL or AI-GENERATED or FAKE]
 Confidence: [0-100%]
