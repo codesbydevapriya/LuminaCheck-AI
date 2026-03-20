@@ -312,10 +312,10 @@ if page == "🔍 Detect":
         st.title("LuminaCheck AI")
         st.markdown("<p style='color:#8899aa; font-size:16px; margin-top:-10px;'>Advanced AI-Powered Image Authenticity Detection</p>", unsafe_allow_html=True)
         st.markdown("""
-        <span class="tag">🤖 Gemini AI</span>
-        <span class="tag">🔬 Forensic Analysis</span>
-        <span class="tag">⚡ Real-time</span>
-        <span class="tag">🛡️ Secure</span>
+        <span class="tag"> Gemini AI</span>
+        <span class="tag"> Forensic Analysis</span>
+        <span class="tag"> Real-time</span>
+        <span class="tag"> Secure</span>
         """, unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
