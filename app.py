@@ -7,6 +7,7 @@ from datetime import datetime
 import time
 import requests
 import io
+import threading
 
 genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
 HIVE_API_KEY = os.environ.get("HIVE_API_KEY")
@@ -22,7 +23,7 @@ st.markdown("""
 [data-testid="stSidebar"] * { color: #1e293b !important; }
 .stButton>button { background: #0f172a !important; color: white !important; border-radius: 8px !important; padding: 12px 24px !important; font-size: 14px !important; font-weight: 600 !important; border: none !important; transition: all 0.2s ease !important; width: 100% !important; }
 .stButton>button:hover { background: #1e293b !important; transform: translateY(-1px) !important; box-shadow: 0 4px 12px rgba(15,23,42,0.3) !important; }
-h1 { color: #0f172a !important; font-size: 2.8rem !important; font-weight: 800 !important; letter-spacing: -1px !important; -webkit-text-fill-color: #0f172a !important; }
+h1 { color: #0f172a !important; font-size: 2.8rem !important; font-weight: 800 !important; -webkit-text-fill-color: #0f172a !important; }
 [data-testid="stFileUploader"] { background: #ffffff !important; border: 2px dashed #cbd5e1 !important; border-radius: 16px !important; padding: 30px !important; transition: all 0.3s ease !important; }
 [data-testid="stFileUploader"]:hover { border-color: #6366f1 !important; box-shadow: 0 0 0 4px rgba(99,102,241,0.1) !important; }
 .hero-section { background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%); border-radius: 20px; padding: 50px 40px; margin-bottom: 30px; position: relative; overflow: hidden; }
@@ -38,7 +39,6 @@ h1 { color: #0f172a !important; font-size: 2.8rem !important; font-weight: 800 !
 .verdict-badge-fake { background: #ef4444; color: white; font-size: 18px; font-weight: 700; padding: 10px 28px; border-radius: 50px; display: inline-block; letter-spacing: 1px; margin-bottom: 15px; }
 .scan-container { border-radius: 16px; overflow: hidden; border: 2px solid #e2e8f0; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
 .spinning-loader { width: 44px; height: 44px; border: 3px solid #e2e8f0; border-top: 3px solid #6366f1; border-radius: 50%; animation: rotate 0.8s linear infinite; margin: 0 auto; }
-.hive-score { background: linear-gradient(135deg, #0f172a, #1e293b); border-radius: 16px; padding: 20px; text-align: center; margin: 10px 0; }
 .chat-msg-user { background: #0f172a; color: white; border-radius: 18px 18px 4px 18px; padding: 12px 18px; margin: 8px 0; margin-left: 20%; font-size: 14px; }
 .chat-msg-ai { background: #ffffff; border: 1px solid #e2e8f0; color: #334155; border-radius: 18px 18px 18px 4px; padding: 12px 18px; margin: 8px 0; margin-right: 20%; font-size: 14px; line-height: 1.7; }
 .chat-widget { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 20px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
@@ -62,28 +62,42 @@ LOGO_SVG = """<svg width="36" height="36" viewBox="0 0 200 200" xmlns="http://ww
   <line x1="132" y1="132" x2="155" y2="155" stroke="#6366f1" stroke-width="10" stroke-linecap="round"/>
 </svg>"""
 
-def detect_with_hive(image_bytes):
+def detect_with_hive(image_bytes, results):
     try:
         response = requests.post(
             "https://api.thehive.ai/api/v2/task/sync",
             headers={"Authorization": f"Token {HIVE_API_KEY}"},
             files={"image": ("image.jpg", image_bytes, "image/jpeg")},
-            data={"model": "ai_generated_image_detection"}
+            data={"model": "ai_generated_image_detection"},
+            timeout=15
         )
         if response.status_code == 200:
             data = response.json()
             classes = data["status"][0]["response"]["output"][0]["classes"]
-            ai_score = 0
-            real_score = 0
             for c in classes:
                 if c["class"] == "ai_generated":
-                    ai_score = c["score"]
+                    results["hive_ai"] = c["score"]
                 elif c["class"] == "real":
-                    real_score = c["score"]
-            return ai_score, real_score
+                    results["hive_real"] = c["score"]
     except:
-        pass
-    return None, None
+        results["hive_ai"] = None
+
+def detect_with_gemini(image, results):
+    try:
+        model = genai.GenerativeModel("gemini-2.5-flash")
+        response = model.generate_content([
+            image,
+            """You are a forensic image authentication expert.
+Analyze this image and determine if it is REAL or AI-GENERATED/FAKE.
+Check for: unnatural skin, perfect symmetry, distorted hands, impossible lighting, overly perfect features.
+Reply ONLY in this exact format:
+Verdict: [REAL or AI-GENERATED or FAKE]
+Confidence: [0-100%]
+Reason: [2-3 specific visual clues]"""
+        ])
+        results["gemini"] = response.text
+    except:
+        results["gemini"] = None
 
 st.sidebar.markdown(f"""
 <div style='display:flex; align-items:center; gap:10px; padding:10px 0; margin-bottom:10px;'>
@@ -153,17 +167,13 @@ Question: {user_input}""")
         st.rerun()
 
 if page == "Detect":
-    st.markdown(f"""
+    st.markdown("""
     <div class="hero-section">
         <div style='position:relative; z-index:1;'>
-            <div style='display:flex; align-items:center; gap:15px; margin-bottom:20px;'>
-                <div>
-                    <p style='color:rgba(255,255,255,0.6); font-size:13px; margin:0; letter-spacing:2px; text-transform:uppercase;'>AI Image Detection</p>
-                    <h1 style='color:white !important; font-size:2.5rem; font-weight:800; margin:4px 0 0 0; -webkit-text-fill-color:white !important;'>LuminaCheck AI</h1>
-                </div>
-            </div>
+            <p style='color:rgba(255,255,255,0.6); font-size:13px; margin:0 0 8px 0; letter-spacing:2px; text-transform:uppercase;'>AI Image Detection</p>
+            <h1 style='color:white !important; font-size:2.5rem; font-weight:800; margin:0 0 15px 0; -webkit-text-fill-color:white !important;'>LuminaCheck AI</h1>
             <p style='color:rgba(255,255,255,0.7); font-size:16px; margin:0 0 25px 0; max-width:600px;'>
-                Dual-engine AI image authentication using Hive AI + Google Gemini. Detect REAL, FAKE, or AI-GENERATED images with high accuracy.
+                Dual-engine AI image authentication. Hive AI + Google Gemini running in parallel for fast, accurate results.
             </p>
             <div style='display:flex; gap:30px; flex-wrap:wrap;'>
                 <div>
@@ -173,12 +183,12 @@ if page == "Detect":
                 <div style='width:1px; background:rgba(255,255,255,0.1);'></div>
                 <div>
                     <p class='stat-number'>Gemini</p>
-                    <p class='stat-label'>Detailed Analysis</p>
+                    <p class='stat-label'>Visual Reasoning</p>
                 </div>
                 <div style='width:1px; background:rgba(255,255,255,0.1);'></div>
                 <div>
-                    <p class='stat-number'>Free</p>
-                    <p class='stat-label'>No Cost Detection</p>
+                    <p class='stat-number'>Fast</p>
+                    <p class='stat-label'>Parallel Processing</p>
                 </div>
             </div>
         </div>
@@ -189,17 +199,17 @@ if page == "Detect":
     with c1:
         st.markdown("""<div class="ts-card">
             <p style='color:#6366f1; font-weight:700; font-size:15px; margin:0;'>Hive AI Engine</p>
-            <p style='color:#64748b; font-size:13px; margin:6px 0 0 0;'>Specialized AI image detection model</p>
+            <p style='color:#64748b; font-size:13px; margin:6px 0 0 0;'>Specialized AI image detection</p>
         </div>""", unsafe_allow_html=True)
     with c2:
         st.markdown("""<div class="ts-card">
             <p style='color:#06b6d4; font-weight:700; font-size:15px; margin:0;'>Gemini Vision</p>
-            <p style='color:#64748b; font-size:13px; margin:6px 0 0 0;'>Detailed forensic visual reasoning</p>
+            <p style='color:#64748b; font-size:13px; margin:6px 0 0 0;'>Detailed forensic reasoning</p>
         </div>""", unsafe_allow_html=True)
     with c3:
         st.markdown("""<div class="ts-card">
-            <p style='color:#10b981; font-weight:700; font-size:15px; margin:0;'>Dual Verdict</p>
-            <p style='color:#64748b; font-size:13px; margin:6px 0 0 0;'>Combined accuracy from two AI engines</p>
+            <p style='color:#10b981; font-weight:700; font-size:15px; margin:0;'>Parallel Processing</p>
+            <p style='color:#64748b; font-size:13px; margin:6px 0 0 0;'>Both engines run simultaneously</p>
         </div>""", unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
@@ -222,7 +232,7 @@ if page == "Detect":
             st.markdown('</div>', unsafe_allow_html=True)
         with col2:
             st.markdown(f"""
-            <div class="ts-card" style='height:100%;'>
+            <div class="ts-card">
                 <p style='color:#0f172a; font-weight:700; font-size:15px; margin:0 0 15px 0;'>File Details</p>
                 <div style='background:#f8fafc; border-radius:8px; padding:12px; margin-bottom:10px;'>
                     <p style='color:#64748b; font-size:12px; margin:0;'>File Name</p>
@@ -241,107 +251,82 @@ if page == "Detect":
 
             if st.button("Analyze Image"):
                 result_placeholder = st.empty()
-
-                # Step 1 - Hive AI
                 result_placeholder.markdown("""
                 <div style='text-align:center; padding:30px; background:#f8fafc; border-radius:16px;'>
                     <div class='spinning-loader'></div>
-                    <p style='color:#6366f1; font-size:15px; margin-top:16px; font-weight:600;'>Hive AI scanning image...</p>
+                    <p style='color:#6366f1; font-size:15px; margin-top:16px; font-weight:600;'>Running parallel analysis...</p>
+                    <p style='color:#94a3b8; font-size:12px; margin-top:5px;'>Hive AI + Gemini working simultaneously</p>
                 </div>
                 """, unsafe_allow_html=True)
 
+                # Prepare image bytes
                 img_bytes = io.BytesIO()
                 image.save(img_bytes, format="JPEG")
-                img_bytes.seek(0)
-                hive_ai_score, hive_real_score = detect_with_hive(img_bytes.getvalue())
+                img_bytes_val = img_bytes.getvalue()
 
-                # Step 2 - Gemini AI
-                result_placeholder.markdown("""
-                <div style='text-align:center; padding:30px; background:#f8fafc; border-radius:16px;'>
-                    <div class='spinning-loader'></div>
-                    <p style='color:#6366f1; font-size:15px; margin-top:16px; font-weight:600;'>Gemini AI analyzing details...</p>
-                </div>
-                """, unsafe_allow_html=True)
+                # Run both APIs in parallel
+                results = {}
+                t1 = threading.Thread(target=detect_with_hive, args=(img_bytes_val, results))
+                t2 = threading.Thread(target=detect_with_gemini, args=(image, results))
+                t1.start()
+                t2.start()
+                t1.join()
+                t2.join()
 
-                model = genai.GenerativeModel("gemini-2.5-flash")
-                response = model.generate_content([
-                    image,
-                    """You are a forensic image authentication expert.
-Analyze this image and determine if it is REAL or AI-GENERATED/FAKE.
-Check for: unnatural skin, perfect symmetry, distorted hands, impossible lighting, overly perfect features.
-Reply ONLY in this exact format:
-Verdict: [REAL or AI-GENERATED or FAKE]
-Confidence: [0-100%]
-Reason: [2-3 specific visual clues]"""
-                ])
-                gemini_result = response.text
                 result_placeholder.empty()
 
-                # Final verdict
+                hive_ai = results.get("hive_ai")
+                hive_real = results.get("hive_real", 0)
+                gemini_result = results.get("gemini", "Analysis unavailable")
+
                 st.markdown("---")
 
-                # Hive Score Display
-                if hive_ai_score is not None:
-                    hive_percent = round(hive_ai_score * 100)
-                    real_percent = round(hive_real_score * 100)
-
+                # Hive Score
+                if hive_ai is not None:
+                    hive_percent = round(hive_ai * 100)
+                    real_percent = round(hive_real * 100)
                     st.markdown(f"""
                     <div class="ts-card" style='margin-bottom:15px;'>
-                        <p style='color:#0f172a; font-weight:700; font-size:15px; margin:0 0 15px 0;'>Hive AI Detection Score</p>
+                        <p style='color:#0f172a; font-weight:700; font-size:15px; margin:0 0 15px 0;'>Hive AI Score</p>
                         <div style='display:flex; gap:20px;'>
                             <div style='flex:1; background:#fef2f2; border-radius:12px; padding:15px; text-align:center;'>
                                 <p style='color:#ef4444; font-size:28px; font-weight:800; margin:0;'>{hive_percent}%</p>
-                                <p style='color:#64748b; font-size:12px; margin:4px 0 0 0;'>AI Generated Probability</p>
+                                <p style='color:#64748b; font-size:12px; margin:4px 0 0 0;'>AI Generated</p>
                             </div>
                             <div style='flex:1; background:#f0fdf4; border-radius:12px; padding:15px; text-align:center;'>
                                 <p style='color:#22c55e; font-size:28px; font-weight:800; margin:0;'>{real_percent}%</p>
-                                <p style='color:#64748b; font-size:12px; margin:4px 0 0 0;'>Real Image Probability</p>
+                                <p style='color:#64748b; font-size:12px; margin:4px 0 0 0;'>Real Image</p>
                             </div>
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
-
-                    # Combined verdict
-                    if hive_ai_score > 0.5:
-                        verdict = "FAKE/AI-GENERATED"
-                        st.markdown(f"""
-                        <div class="verdict-fake">
-                            <div class="verdict-badge-fake">FAKE / AI-GENERATED</div>
-                            <p style='color:#7f1d1d; font-size:14px; margin-top:15px; line-height:1.7;'>{gemini_result}</p>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    else:
-                        verdict = "REAL"
-                        st.markdown(f"""
-                        <div class="verdict-real">
-                            <div class="verdict-badge-real">REAL IMAGE VERIFIED</div>
-                            <p style='color:#14532d; font-size:14px; margin-top:15px; line-height:1.7;'>{gemini_result}</p>
-                        </div>
-                        """, unsafe_allow_html=True)
+                    is_fake = hive_ai > 0.5
                 else:
-                    # Fallback to Gemini only
-                    if "FAKE" in gemini_result.upper() or "AI-GENERATED" in gemini_result.upper():
-                        verdict = "FAKE/AI-GENERATED"
-                        st.markdown(f"""
-                        <div class="verdict-fake">
-                            <div class="verdict-badge-fake">FAKE / AI-GENERATED</div>
-                            <p style='color:#7f1d1d; font-size:14px; margin-top:15px; line-height:1.7;'>{gemini_result}</p>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    else:
-                        verdict = "REAL"
-                        st.markdown(f"""
-                        <div class="verdict-real">
-                            <div class="verdict-badge-real">REAL IMAGE VERIFIED</div>
-                            <p style='color:#14532d; font-size:14px; margin-top:15px; line-height:1.7;'>{gemini_result}</p>
-                        </div>
-                        """, unsafe_allow_html=True)
+                    is_fake = "FAKE" in (gemini_result or "").upper() or "AI-GENERATED" in (gemini_result or "").upper()
+
+                # Final Verdict
+                if is_fake:
+                    verdict = "FAKE/AI-GENERATED"
+                    st.markdown(f"""
+                    <div class="verdict-fake">
+                        <div class="verdict-badge-fake">FAKE / AI-GENERATED</div>
+                        <p style='color:#7f1d1d; font-size:14px; margin-top:15px; line-height:1.7;'>{gemini_result}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    verdict = "REAL"
+                    st.markdown(f"""
+                    <div class="verdict-real">
+                        <div class="verdict-badge-real">REAL IMAGE VERIFIED</div>
+                        <p style='color:#14532d; font-size:14px; margin-top:15px; line-height:1.7;'>{gemini_result}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
 
                 st.session_state.history.append({
                     "Time": datetime.now().strftime("%H:%M:%S"),
                     "File": uploaded_file.name,
                     "Result": verdict,
-                    "Details": gemini_result[:120]
+                    "Details": (gemini_result or "")[:120]
                 })
 
     show_chat_widget()
@@ -372,7 +357,7 @@ elif page == "About":
         <div class="ts-card">
             <p style='color:#6366f1; font-weight:700; font-size:15px; margin:0 0 10px 0;'>What is LuminaCheck AI?</p>
             <p style='color:#475569; font-size:14px; line-height:1.7; margin:0;'>
-            LuminaCheck AI uses dual AI engines — Hive AI and Google Gemini — to detect whether a digital image is REAL, FAKE, or AI-GENERATED with high accuracy.
+            LuminaCheck AI uses dual AI engines — Hive AI and Google Gemini — running in parallel to detect whether a digital image is REAL, FAKE, or AI-GENERATED with high accuracy and speed.
             </p>
         </div>
         """, unsafe_allow_html=True)
@@ -383,7 +368,7 @@ elif page == "About":
             <p style='color:#475569; font-size:14px; line-height:2; margin:0;'>
             Python | Streamlit<br>
             Hive AI (Specialized Detection)<br>
-            Google Gemini AI (Analysis)<br>
+            Google Gemini AI (Visual Reasoning)<br>
             Streamlit Cloud
             </p>
         </div>
