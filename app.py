@@ -33,7 +33,8 @@ st.markdown("""
 .stButton>button { background: linear-gradient(135deg, #00d4aa, #0099ff) !important; color: white !important; border-radius: 12px !important; padding: 14px 28px !important; font-size: 15px !important; font-weight: 600 !important; border: none !important; box-shadow: 0 0 20px rgba(0,212,170,0.3) !important; transition: all 0.3s ease !important; width: 100% !important; }
 .stButton>button:hover { transform: translateY(-3px) !important; box-shadow: 0 0 35px rgba(0,212,170,0.6) !important; }
 h1 { background: linear-gradient(135deg, #00d4aa, #0099ff, #c9a84c); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size: 2.8rem !important; font-weight: 700 !important; }
-[data-testid="stFileUploader"] { background: #0d1421; border: 2px dashed #1e3a5f; border-radius: 16px; }
+[data-testid="stFileUploader"] { background: linear-gradient(135deg, rgba(0,212,170,0.05), rgba(0,153,255,0.05)) !important; border: 2px dashed #00d4aa !important; border-radius: 20px !important; padding: 20px !important; transition: all 0.3s ease !important; }
+[data-testid="stFileUploader"]:hover { border-color: #0099ff !important; background: linear-gradient(135deg, rgba(0,212,170,0.1), rgba(0,153,255,0.1)) !important; box-shadow: 0 0 25px rgba(0,212,170,0.2) !important; }
 .hero-logo { animation: float 3s ease-in-out infinite; display: inline-block; }
 .sidebar-logo { animation: float 4s ease-in-out infinite; }
 .scan-container { position: relative; overflow: hidden; border-radius: 16px; border: 2px solid #00d4aa; animation: glow 2s ease-in-out infinite; }
@@ -49,7 +50,7 @@ h1 { background: linear-gradient(135deg, #00d4aa, #0099ff, #c9a84c); -webkit-bac
 .chat-msg-user { background: linear-gradient(135deg, #00d4aa, #0099ff); color: #050a14; border-radius: 18px 18px 4px 18px; padding: 12px 18px; margin: 8px 0; margin-left: 20%; font-size: 14px; font-weight: 500; animation: slideIn 0.3s ease-out; }
 .chat-msg-ai { background: linear-gradient(135deg, rgba(13,20,33,0.95), rgba(17,24,39,0.95)); border: 1px solid #1e3a5f; color: #e0e0e0; border-radius: 18px 18px 18px 4px; padding: 12px 18px; margin: 8px 0; margin-right: 20%; font-size: 14px; line-height: 1.7; animation: slideIn 0.3s ease-out; }
 .chat-widget { background: linear-gradient(135deg, rgba(13,20,33,0.95), rgba(17,24,39,0.95)); border: 1px solid #1e3a5f; border-radius: 20px; overflow: hidden; box-shadow: 0 0 30px rgba(0,212,170,0.1); animation: slideIn 0.5s ease-out; }
-.chat-header { background: linear-gradient(135deg, #00d4aa, #0099ff); padding: 15px 20px; display: flex; align-items: center; gap: 12px; }
+.chat-header { background: linear-gradient(135deg, #00d4aa, #0099ff); padding: 15px 20px; }
 </style>
 
 <div class="orb orb1"></div>
@@ -96,15 +97,15 @@ LOGO_BIG = """<svg width="80" height="80" viewBox="0 0 200 200" xmlns="http://ww
   <line x1="132" y1="132" x2="158" y2="158" stroke="url(#g2)" stroke-width="6" stroke-linecap="round"/>
 </svg>"""
 
-page = st.sidebar.radio("Navigation", [" Detect", " History", " About"])
+page = st.sidebar.radio("Navigation", ["Detect", "History", "About"])
 st.sidebar.markdown("---")
 st.sidebar.markdown(f'<div class="sidebar-logo">{LOGO_SVG}</div>', unsafe_allow_html=True)
 st.sidebar.markdown("<p style='color:#00d4aa; font-weight:700; font-size:17px; margin:5px 0;'>LuminaCheck AI</p>", unsafe_allow_html=True)
 st.sidebar.markdown("<p style='color:#555; font-size:12px; font-style:italic;'>Where Light Reveals Truth</p>", unsafe_allow_html=True)
 st.sidebar.markdown("---")
-st.sidebar.markdown("<p style='color:#8899aa; font-size:12px;'> Upload any image to detect if it is REAL or FAKE.</p>", unsafe_allow_html=True)
+st.sidebar.markdown("<p style='color:#8899aa; font-size:12px;'>Upload any image to detect if it is REAL or FAKE using advanced AI forensics.</p>", unsafe_allow_html=True)
 st.sidebar.markdown("---")
-st.sidebar.markdown("<p style='color:#333; font-size:11px; text-align:center;'>⚡ Powered by Google Gemini AI</p>", unsafe_allow_html=True)
+st.sidebar.markdown("<p style='color:#333; font-size:11px; text-align:center;'>Powered by Google Gemini AI</p>", unsafe_allow_html=True)
 
 if "history" not in st.session_state:
     st.session_state.history = []
@@ -116,45 +117,40 @@ def show_chat_widget():
     st.markdown("""
     <div class="chat-widget">
         <div class="chat-header">
-            <span style='font-size:28px;'></span>
-            <div>
-                <p style='color:white; font-weight:700; font-size:16px; margin:0;'>LuminaCheck AI Assistant</p>
-                <p style='color:rgba(255,255,255,0.8); font-size:12px; margin:0;'>⚡ Powered by Gemini AI</p>
-            </div>
+            <p style='color:white; font-weight:700; font-size:16px; margin:0;'>LuminaCheck AI Assistant</p>
+            <p style='color:rgba(255,255,255,0.8); font-size:12px; margin:0;'>Powered by Gemini AI</p>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-    chat_box = st.container()
-    with chat_box:
-        if not st.session_state.chat_history:
-            st.markdown("""
-            <div style='padding:20px; text-align:center;'>
-                <p style='color:#8899aa; font-size:13px;'> Ask me anything about image detection, deepfakes, or AI!</p>
-                <span class="tag">What is a deepfake?</span>
-                <span class="tag">How does AI detect fake images?</span>
-            </div>
-            """, unsafe_allow_html=True)
-        else:
-            for msg in st.session_state.chat_history[-6:]:
-                if msg["role"] == "user":
-                    st.markdown(f'<div class="chat-msg-user"> &nbsp;{msg["content"]}</div>', unsafe_allow_html=True)
-                else:
-                    st.markdown(f'<div class="chat-msg-ai"> &nbsp;{msg["content"]}</div>', unsafe_allow_html=True)
+    if not st.session_state.chat_history:
+        st.markdown("""
+        <div style='padding:15px; text-align:center; background:rgba(13,20,33,0.8); border:1px solid #1e3a5f; border-radius:0 0 16px 16px;'>
+            <p style='color:#8899aa; font-size:13px;'>Ask me anything about image detection, deepfakes, or AI!</p>
+            <span class="tag">What is a deepfake?</span>
+            <span class="tag">How does AI detect fake images?</span>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        for msg in st.session_state.chat_history[-6:]:
+            if msg["role"] == "user":
+                st.markdown(f'<div class="chat-msg-user">{msg["content"]}</div>', unsafe_allow_html=True)
+            else:
+                st.markdown(f'<div class="chat-msg-ai">{msg["content"]}</div>', unsafe_allow_html=True)
 
     col1, col2, col3 = st.columns([5, 1, 1])
     with col1:
-        user_input = st.text_input("", placeholder=" Ask anything...", key="chat_bottom", label_visibility="collapsed")
+        user_input = st.text_input("", placeholder="Ask anything...", key="chat_bottom", label_visibility="collapsed")
     with col2:
-        send = st.button("Send ", key="send_bottom")
+        send = st.button("Send", key="send_bottom")
     with col3:
-        if st.button("", key="clear_bottom"):
+        if st.button("Clear", key="clear_bottom"):
             st.session_state.chat_history = []
             st.rerun()
 
     if send and user_input:
         st.session_state.chat_history.append({"role": "user", "content": user_input})
-        with st.spinner(" Thinking..."):
+        with st.spinner("Thinking..."):
             model = genai.GenerativeModel("gemini-2.5-flash")
             response = model.generate_content(f"""You are LuminaCheck AI Assistant, expert in image forensics and deepfake detection.
 Answer in 2-3 short sentences only.
@@ -162,7 +158,7 @@ Question: {user_input}""")
         st.session_state.chat_history.append({"role": "assistant", "content": response.text})
         st.rerun()
 
-if page == " Detect":
+if page == "Detect":
     col1, col2 = st.columns([1, 7])
     with col1:
         st.markdown(f'<div class="hero-logo">{LOGO_BIG}</div>', unsafe_allow_html=True)
@@ -170,10 +166,10 @@ if page == " Detect":
         st.title("LuminaCheck AI")
         st.markdown("<p style='color:#8899aa; font-size:16px; margin-top:-10px;'>Advanced AI-Powered Image Authenticity Detection</p>", unsafe_allow_html=True)
         st.markdown("""
-        <span class="tag"> Gemini AI</span>
-        <span class="tag"> Forensic Analysis</span>
-        <span class="tag"> Real-time</span>
-        <span class="tag"> Secure</span>
+        <span class="tag">Gemini AI</span>
+        <span class="tag">Forensic Analysis</span>
+        <span class="tag">Real-time</span>
+        <span class="tag">Secure</span>
         """, unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
@@ -190,12 +186,12 @@ if page == " Detect":
         </div>""", unsafe_allow_html=True)
     with c3:
         st.markdown("""<div class="stat-card">
-            <h2 style='color:#c9a84c; font-size:2rem; margin:0;'>⚡</h2>
+            <h2 style='color:#c9a84c; font-size:2rem; margin:0;'>Fast</h2>
             <p style='color:#8899aa; margin:5px 0 0 0; font-size:13px;'>Instant Results</p>
         </div>""", unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown("<p style='color:#8899aa; font-size:14px;'> Upload Image</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#8899aa; font-size:14px;'>Upload Image</p>", unsafe_allow_html=True)
     uploaded_file = st.file_uploader("", type=["jpg", "jpeg", "png"], label_visibility="collapsed")
 
     if uploaded_file is not None:
@@ -210,18 +206,18 @@ if page == " Detect":
             st.markdown("<br>", unsafe_allow_html=True)
             st.markdown(f"""
             <div class="stat-card">
-                <p style='color:#00d4aa; font-weight:600; font-size:15px; margin:0;'> File Details</p>
+                <p style='color:#00d4aa; font-weight:600; font-size:15px; margin:0;'>File Details</p>
                 <hr style='border-color:#1e3a5f; margin:10px 0;'>
-                <p style='color:#8899aa; font-size:13px; margin:5px 0;'> <b style='color:#fff;'>{uploaded_file.name}</b></p>
-                <p style='color:#8899aa; font-size:13px; margin:5px 0;'> Size: <b style='color:#fff;'>{uploaded_file.size / 1024:.1f} KB</b></p>
-                <p style='color:#00d4aa; font-size:13px; margin:5px 0;'> Ready for analysis</p>
+                <p style='color:#8899aa; font-size:13px; margin:5px 0;'>Name: <b style='color:#fff;'>{uploaded_file.name}</b></p>
+                <p style='color:#8899aa; font-size:13px; margin:5px 0;'>Size: <b style='color:#fff;'>{uploaded_file.size / 1024:.1f} KB</b></p>
+                <p style='color:#00d4aa; font-size:13px; margin:5px 0;'>Ready for analysis</p>
             </div>
             """, unsafe_allow_html=True)
             st.markdown("<br>", unsafe_allow_html=True)
 
-            if st.button(" Analyze Image Now"):
+            if st.button("Analyze Image Now"):
                 result_placeholder = st.empty()
-                for msg in [" Initializing forensic scanner...", " Loading AI model...", " Gemini AI analyzing...", " Processing results..."]:
+                for msg in ["Initializing forensic scanner...", "Loading AI model...", "Gemini AI analyzing...", "Processing results..."]:
                     result_placeholder.markdown(f"""
                     <div style='text-align:center; padding:30px;'>
                         <div class='spinning-loader'></div>
@@ -249,8 +245,8 @@ Reason: [2-3 specific visual clues]"""
                     verdict = "FAKE/AI-GENERATED"
                     st.markdown(f"""
                     <div class="verdict-fake">
-                        <div style='font-size:60px; margin-bottom:10px;'>🚨</div>
-                        <div class="verdict-badge-fake">⚠️ FAKE / AI-GENERATED</div>
+                        <div style='font-size:60px; margin-bottom:10px;'>!</div>
+                        <div class="verdict-badge-fake">FAKE / AI-GENERATED</div>
                         <p style='color:#ffaa99; font-size:14px; margin-top:15px; line-height:1.7;'>{result}</p>
                     </div>
                     """, unsafe_allow_html=True)
@@ -258,8 +254,8 @@ Reason: [2-3 specific visual clues]"""
                     verdict = "REAL"
                     st.markdown(f"""
                     <div class="verdict-real">
-                        <div style='font-size:60px; margin-bottom:10px;'>✅</div>
-                        <div class="verdict-badge-real">✅ REAL IMAGE VERIFIED</div>
+                        <div style='font-size:60px; margin-bottom:10px;'>✓</div>
+                        <div class="verdict-badge-real">REAL IMAGE VERIFIED</div>
                         <p style='color:#99ffee; font-size:14px; margin-top:15px; line-height:1.7;'>{result}</p>
                     </div>
                     """, unsafe_allow_html=True)
@@ -271,28 +267,26 @@ Reason: [2-3 specific visual clues]"""
                     "Details": result[:120]
                 })
 
-    # Chat widget at bottom of detect page
     show_chat_widget()
 
-elif page == " History":
-    st.title(" Detection History")
+elif page == "History":
+    st.title("Detection History")
     st.markdown("---")
     if st.session_state.history:
         df = pd.DataFrame(st.session_state.history)
         st.dataframe(df, use_container_width=True)
         csv = df.to_csv(index=False)
-        st.download_button(" Download Report (CSV)", csv, "lumina_report.csv", "text/csv")
+        st.download_button("Download Report (CSV)", csv, "lumina_report.csv", "text/csv")
     else:
         st.markdown("""
         <div style='text-align:center; padding:50px;'>
-            <p style='font-size:50px;'>📭</p>
             <p style='color:#8899aa; font-size:18px;'>No detections yet</p>
             <p style='color:#555; font-size:14px;'>Go to Detect page and upload an image!</p>
         </div>
         """, unsafe_allow_html=True)
     show_chat_widget()
 
-elif page == " About":
+elif page == "About":
     col1, col2 = st.columns([1, 8])
     with col1:
         st.markdown(f'<div class="hero-logo">{LOGO_BIG}</div>', unsafe_allow_html=True)
@@ -303,7 +297,7 @@ elif page == " About":
     with c1:
         st.markdown("""
         <div class="stat-card">
-            <h3 style='color:#00d4aa;'> What is LuminaCheck AI?</h3>
+            <h3 style='color:#00d4aa;'>What is LuminaCheck AI?</h3>
             <p style='color:#8899aa; font-size:14px; line-height:1.7;'>
             LuminaCheck AI is a Final Year BCA Project that uses Google Gemini Vision AI to detect whether a digital image is REAL, FAKE, or AI-GENERATED.
             </p>
@@ -312,24 +306,24 @@ elif page == " About":
     with c2:
         st.markdown("""
         <div class="stat-card">
-            <h3 style='color:#0099ff;'> Technologies Used</h3>
+            <h3 style='color:#0099ff;'>Technologies Used</h3>
             <p style='color:#8899aa; font-size:14px; line-height:1.8;'>
-             Python &nbsp;|&nbsp;  Streamlit<br>
-             Google Gemini AI<br>
-             Pillow &nbsp;|&nbsp;  Pandas<br>
-             Streamlit Cloud
+            Python | Streamlit<br>
+            Google Gemini AI<br>
+            Pillow | Pandas<br>
+            Streamlit Cloud
             </p>
         </div>
         """, unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
     st.markdown("""
     <div class="stat-card" style='text-align:center;'>
-        <h3 style='color:#c9a84c;'> Developed By</h3>
+        <h3 style='color:#c9a84c;'>Developed By</h3>
         <p style='color:#fff; font-size:20px; font-weight:600;'>Devapriya</p>
         <p style='color:#8899aa;'>BCA Final Year Student | March 2026</p>
         <br>
-        <span class="tag"> luminacheck-ai.streamlit.app</span>
-        <span class="tag"> github.com/codesbydevapriya</span>
+        <span class="tag">luminacheck-ai.streamlit.app</span>
+        <span class="tag">github.com/codesbydevapriya</span>
     </div>
     """, unsafe_allow_html=True)
     show_chat_widget()
