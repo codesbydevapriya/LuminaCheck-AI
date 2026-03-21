@@ -63,23 +63,32 @@ def detect_with_hive(image_bytes):
             "https://api.thehive.ai/api/v2/task/sync",
             headers={"Authorization": f"Token {HIVE_API_KEY}"},
             files={"image": ("image.jpg", image_bytes, "image/jpeg")},
-            data={"model": "ai_generated_image_detection"},
             timeout=15
         )
         if response.status_code == 200:
             data = response.json()
-            classes = data["status"][0]["response"]["output"][0]["classes"]
-            ai_score = 0
-            real_score = 0
-            for c in classes:
-                if c["class"] == "ai_generated":
-                    ai_score = c["score"]
-                elif c["class"] == "real":
-                    real_score = c["score"]
-            return ai_score, real_score
+            # Debug — response structure കാണാൻ
+            st.write("DEBUG:", data)
+            try:
+                classes = data["status"][0]["response"]["output"][0]["classes"]
+                ai_score = 0
+                real_score = 0
+                for c in classes:
+                    cls = c["class"].lower().replace(" ", "_")
+                    if "ai" in cls or "generated" in cls or "fake" in cls:
+                        ai_score = c["score"]
+                    elif "real" in cls or "not_ai" in cls or "human" in cls:
+                        real_score = c["score"]
+                return ai_score, real_score
+            except Exception as parse_err:
+                st.write("Parse Error:", str(parse_err), data)
+                return None, None
+        else:
+            st.write("API Error:", response.status_code, response.text[:500])
+            return None, None
     except Exception as e:
+        st.write("Connection Error:", str(e))
         return None, None
-    return None, None
 
 st.sidebar.markdown(f"""
 <div style='display:flex; align-items:center; gap:10px; padding:10px 0; margin-bottom:10px;'>
@@ -330,7 +339,7 @@ elif page == "About":
         <div class="ts-card">
             <p style='color:#6366f1; font-weight:700; font-size:15px; margin:0 0 10px 0;'>What is LuminaCheck AI?</p>
             <p style='color:#475569; font-size:14px; line-height:1.7; margin:0;'>
-            LuminaCheck AI uses Hive AI — a specialized image detection engine — to accurately determine whether a digital image is REAL, FAKE, or AI-GENERATED with instant results.
+            LuminaCheck AI uses Hive AI specialized detection engine to accurately determine whether a digital image is REAL, FAKE, or AI-GENERATED with instant results.
             </p>
         </div>
         """, unsafe_allow_html=True)
