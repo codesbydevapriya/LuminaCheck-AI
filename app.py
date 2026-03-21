@@ -38,13 +38,11 @@ h1 { color: #0f172a !important; font-size: 2.8rem !important; font-weight: 800 !
 .verdict-badge-real { background: #22c55e; color: white; font-size: 18px; font-weight: 700; padding: 10px 28px; border-radius: 50px; display: inline-block; letter-spacing: 1px; margin-bottom: 15px; }
 .verdict-badge-fake { background: #ef4444; color: white; font-size: 18px; font-weight: 700; padding: 10px 28px; border-radius: 50px; display: inline-block; letter-spacing: 1px; margin-bottom: 15px; }
 .scan-container { border-radius: 16px; overflow: hidden; border: 2px solid #e2e8f0; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
-.spinning-loader { width: 44px; height: 44px; border: 3px solid #e2e8f0; border-top: 3px solid #6366f1; border-radius: 50%; animation: rotate 0.8s linear infinite; margin: 0 auto; }
 .chat-msg-user { background: #0f172a; color: white; border-radius: 18px 18px 4px 18px; padding: 12px 18px; margin: 8px 0; margin-left: 20%; font-size: 14px; }
 .chat-msg-ai { background: #ffffff; border: 1px solid #e2e8f0; color: #334155; border-radius: 18px 18px 18px 4px; padding: 12px 18px; margin: 8px 0; margin-right: 20%; font-size: 14px; line-height: 1.7; }
 .chat-widget { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 20px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
 .chat-header { background: #0f172a; padding: 16px 20px; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 </style>
 """, unsafe_allow_html=True)
 
@@ -176,20 +174,11 @@ if page == "Detect":
                 Dual-engine AI image authentication. Hive AI + Google Gemini running in parallel for fast, accurate results.
             </p>
             <div style='display:flex; gap:30px; flex-wrap:wrap;'>
-                <div>
-                    <p class='stat-number'>Hive AI</p>
-                    <p class='stat-label'>Specialized Detection</p>
-                </div>
+                <div><p class='stat-number'>Hive AI</p><p class='stat-label'>Specialized Detection</p></div>
                 <div style='width:1px; background:rgba(255,255,255,0.1);'></div>
-                <div>
-                    <p class='stat-number'>Gemini</p>
-                    <p class='stat-label'>Visual Reasoning</p>
-                </div>
+                <div><p class='stat-number'>Gemini</p><p class='stat-label'>Visual Reasoning</p></div>
                 <div style='width:1px; background:rgba(255,255,255,0.1);'></div>
-                <div>
-                    <p class='stat-number'>Fast</p>
-                    <p class='stat-label'>Parallel Processing</p>
-                </div>
+                <div><p class='stat-number'>Fast</p><p class='stat-label'>Parallel Processing</p></div>
             </div>
         </div>
     </div>
@@ -250,30 +239,47 @@ if page == "Detect":
             st.markdown("<br>", unsafe_allow_html=True)
 
             if st.button("Analyze Image"):
-                result_placeholder = st.empty()
-                result_placeholder.markdown("""
-                <div style='text-align:center; padding:30px; background:#f8fafc; border-radius:16px;'>
-                    <div class='spinning-loader'></div>
-                    <p style='color:#6366f1; font-size:15px; margin-top:16px; font-weight:600;'>Running parallel analysis...</p>
-                    <p style='color:#94a3b8; font-size:12px; margin-top:5px;'>Hive AI + Gemini working simultaneously</p>
-                </div>
-                """, unsafe_allow_html=True)
 
-                # Prepare image bytes
+                # Progress bar
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+
+                # Step 1
+                status_text.markdown("<p style='color:#6366f1; font-size:14px; font-weight:600;'>Initializing AI engines...</p>", unsafe_allow_html=True)
+                for i in range(0, 20):
+                    time.sleep(0.03)
+                    progress_bar.progress(i)
+
+                # Prepare image
                 img_bytes = io.BytesIO()
                 image.save(img_bytes, format="JPEG")
                 img_bytes_val = img_bytes.getvalue()
-
-                # Run both APIs in parallel
                 results = {}
+
+                # Step 2 - Start parallel threads
+                status_text.markdown("<p style='color:#6366f1; font-size:14px; font-weight:600;'>Hive AI + Gemini analyzing in parallel...</p>", unsafe_allow_html=True)
                 t1 = threading.Thread(target=detect_with_hive, args=(img_bytes_val, results))
                 t2 = threading.Thread(target=detect_with_gemini, args=(image, results))
                 t1.start()
                 t2.start()
+
+                # Animate progress while waiting
+                i = 20
+                while t1.is_alive() or t2.is_alive():
+                    if i < 90:
+                        i += 1
+                        progress_bar.progress(i)
+                    time.sleep(0.1)
+
                 t1.join()
                 t2.join()
 
-                result_placeholder.empty()
+                # Complete
+                status_text.markdown("<p style='color:#22c55e; font-size:14px; font-weight:600;'>Analysis complete!</p>", unsafe_allow_html=True)
+                progress_bar.progress(100)
+                time.sleep(0.5)
+                progress_bar.empty()
+                status_text.empty()
 
                 hive_ai = results.get("hive_ai")
                 hive_real = results.get("hive_real", 0)
@@ -281,7 +287,6 @@ if page == "Detect":
 
                 st.markdown("---")
 
-                # Hive Score
                 if hive_ai is not None:
                     hive_percent = round(hive_ai * 100)
                     real_percent = round(hive_real * 100)
@@ -304,7 +309,6 @@ if page == "Detect":
                 else:
                     is_fake = "FAKE" in (gemini_result or "").upper() or "AI-GENERATED" in (gemini_result or "").upper()
 
-                # Final Verdict
                 if is_fake:
                     verdict = "FAKE/AI-GENERATED"
                     st.markdown(f"""
