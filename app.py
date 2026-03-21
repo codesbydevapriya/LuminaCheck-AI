@@ -29,9 +29,6 @@ st.markdown("""
 @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 @keyframes redPulse { 0%, 100% { box-shadow: 0 0 30px rgba(255,59,48,0.4); } 50% { box-shadow: 0 0 60px rgba(255,59,48,0.8); } }
 @keyframes greenPulse { 0%, 100% { box-shadow: 0 0 30px rgba(0,212,170,0.4); } 50% { box-shadow: 0 0 60px rgba(0,212,170,0.8); } }
-@keyframes chatPop { from { opacity: 0; transform: scale(0.8) translateY(20px); } to { opacity: 1; transform: scale(1) translateY(0); } }
-@keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
-
 [data-testid="stSidebar"] { background: linear-gradient(180deg, #0d1421 0%, #111827 100%) !important; border-right: 1px solid #1e3a5f; }
 .stButton>button { background: linear-gradient(135deg, #00d4aa, #0099ff) !important; color: white !important; border-radius: 12px !important; padding: 14px 28px !important; font-size: 15px !important; font-weight: 600 !important; border: none !important; box-shadow: 0 0 20px rgba(0,212,170,0.3) !important; transition: all 0.3s ease !important; width: 100% !important; }
 .stButton>button:hover { transform: translateY(-3px) !important; box-shadow: 0 0 35px rgba(0,212,170,0.6) !important; }
@@ -49,59 +46,10 @@ h1 { background: linear-gradient(135deg, #00d4aa, #0099ff, #c9a84c); -webkit-bac
 .verdict-badge-real { background: #00d4aa; color: #050a14; font-size: 22px; font-weight: 800; padding: 12px 30px; border-radius: 50px; display: inline-block; letter-spacing: 2px; margin-bottom: 15px; }
 .verdict-badge-fake { background: #ff3b30; color: white; font-size: 22px; font-weight: 800; padding: 12px 30px; border-radius: 50px; display: inline-block; letter-spacing: 2px; margin-bottom: 15px; }
 .star { position: fixed; width: 2px; height: 2px; background: white; border-radius: 50%; animation: twinkle ease-in-out infinite; pointer-events: none; z-index: 0; }
-.chat-msg-user { background: linear-gradient(135deg, #00d4aa, #0099ff); color: #050a14; border-radius: 18px 18px 4px 18px; padding: 12px 18px; margin: 8px 0; margin-left: 15%; font-size: 14px; font-weight: 500; animation: slideIn 0.3s ease-out; }
-.chat-msg-ai { background: linear-gradient(135deg, rgba(13,20,33,0.95), rgba(17,24,39,0.95)); border: 1px solid #1e3a5f; color: #e0e0e0; border-radius: 18px 18px 18px 4px; padding: 12px 18px; margin: 8px 0; margin-right: 15%; font-size: 14px; line-height: 1.7; animation: slideIn 0.3s ease-out; }
-
-/* Floating Chat Button */
-.float-chat-btn {
-    position: fixed;
-    bottom: 30px;
-    right: 30px;
-    width: 65px;
-    height: 65px;
-    background: linear-gradient(135deg, #00d4aa, #0099ff);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 30px;
-    cursor: pointer;
-    z-index: 9999;
-    box-shadow: 0 0 25px rgba(0,212,170,0.5);
-    animation: bounce 2s ease-in-out infinite;
-    text-decoration: none;
-}
-.float-chat-btn:hover {
-    transform: scale(1.15);
-    box-shadow: 0 0 40px rgba(0,212,170,0.8);
-}
-
-/* Chat popup window */
-.chat-popup {
-    position: fixed;
-    bottom: 110px;
-    right: 30px;
-    width: 380px;
-    background: linear-gradient(135deg, #0d1421, #111827);
-    border: 1px solid #1e3a5f;
-    border-radius: 20px;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
-    z-index: 9998;
-    animation: chatPop 0.3s ease-out;
-    overflow: hidden;
-}
-.chat-popup-header {
-    background: linear-gradient(135deg, #00d4aa, #0099ff);
-    padding: 15px 20px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-.chat-popup-body {
-    padding: 15px;
-    max-height: 350px;
-    overflow-y: auto;
-}
+.chat-msg-user { background: linear-gradient(135deg, #00d4aa, #0099ff); color: #050a14; border-radius: 18px 18px 4px 18px; padding: 12px 18px; margin: 8px 0; margin-left: 20%; font-size: 14px; font-weight: 500; animation: slideIn 0.3s ease-out; }
+.chat-msg-ai { background: linear-gradient(135deg, rgba(13,20,33,0.95), rgba(17,24,39,0.95)); border: 1px solid #1e3a5f; color: #e0e0e0; border-radius: 18px 18px 18px 4px; padding: 12px 18px; margin: 8px 0; margin-right: 20%; font-size: 14px; line-height: 1.7; animation: slideIn 0.3s ease-out; }
+.chat-widget { background: linear-gradient(135deg, rgba(13,20,33,0.95), rgba(17,24,39,0.95)); border: 1px solid #1e3a5f; border-radius: 20px; overflow: hidden; box-shadow: 0 0 30px rgba(0,212,170,0.1); animation: slideIn 0.5s ease-out; }
+.chat-header { background: linear-gradient(135deg, #00d4aa, #0099ff); padding: 15px 20px; display: flex; align-items: center; gap: 12px; }
 </style>
 
 <div class="orb orb1"></div>
@@ -154,7 +102,7 @@ st.sidebar.markdown(f'<div class="sidebar-logo">{LOGO_SVG}</div>', unsafe_allow_
 st.sidebar.markdown("<p style='color:#00d4aa; font-weight:700; font-size:17px; margin:5px 0;'>LuminaCheck AI</p>", unsafe_allow_html=True)
 st.sidebar.markdown("<p style='color:#555; font-size:12px; font-style:italic;'>Where Light Reveals Truth</p>", unsafe_allow_html=True)
 st.sidebar.markdown("---")
-st.sidebar.markdown("<p style='color:#8899aa; font-size:12px;'> Upload any image to detect if it is REAL or FAKE using advanced AI forensics.</p>", unsafe_allow_html=True)
+st.sidebar.markdown("<p style='color:#8899aa; font-size:12px;'> Upload any image to detect if it is REAL or FAKE.</p>", unsafe_allow_html=True)
 st.sidebar.markdown("---")
 st.sidebar.markdown("<p style='color:#333; font-size:11px; text-align:center;'>⚡ Powered by Google Gemini AI</p>", unsafe_allow_html=True)
 
@@ -162,52 +110,58 @@ if "history" not in st.session_state:
     st.session_state.history = []
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
-if "show_chat" not in st.session_state:
-    st.session_state.show_chat = False
 
-# ── FLOATING CHAT BUTTON ─────────────────────────────────────
-st.markdown("""
-<a class="float-chat-btn" title="AI Assistant"></a>
-""", unsafe_allow_html=True)
-
-# ── CHAT POPUP ───────────────────────────────────────────────
-with st.expander(" AI Assistant", expanded=st.session_state.show_chat):
+def show_chat_widget():
+    st.markdown("<br><br>", unsafe_allow_html=True)
     st.markdown("""
-    <div style='text-align:center; padding:10px 0;'>
-        <p style='color:#00d4aa; font-size:16px; font-weight:700; margin:0;'> LuminaCheck AI Assistant</p>
-        <p style='color:#8899aa; font-size:12px;'>Ask anything about image detection!</p>
+    <div class="chat-widget">
+        <div class="chat-header">
+            <span style='font-size:28px;'></span>
+            <div>
+                <p style='color:white; font-weight:700; font-size:16px; margin:0;'>LuminaCheck AI Assistant</p>
+                <p style='color:rgba(255,255,255,0.8); font-size:12px; margin:0;'>⚡ Powered by Gemini AI</p>
+            </div>
+        </div>
     </div>
     """, unsafe_allow_html=True)
 
-    if st.session_state.chat_history:
-        for msg in st.session_state.chat_history[-6:]:
-            if msg["role"] == "user":
-                st.markdown(f'<div class="chat-msg-user"> &nbsp;{msg["content"]}</div>', unsafe_allow_html=True)
-            else:
-                st.markdown(f'<div class="chat-msg-ai"> &nbsp;{msg["content"]}</div>', unsafe_allow_html=True)
-    else:
-        st.markdown("<p style='color:#555; font-size:13px; text-align:center; padding:10px;'>Ask me anything about deepfakes, image detection, or AI!</p>", unsafe_allow_html=True)
+    chat_box = st.container()
+    with chat_box:
+        if not st.session_state.chat_history:
+            st.markdown("""
+            <div style='padding:20px; text-align:center;'>
+                <p style='color:#8899aa; font-size:13px;'> Ask me anything about image detection, deepfakes, or AI!</p>
+                <span class="tag">What is a deepfake?</span>
+                <span class="tag">How does AI detect fake images?</span>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            for msg in st.session_state.chat_history[-6:]:
+                if msg["role"] == "user":
+                    st.markdown(f'<div class="chat-msg-user"> &nbsp;{msg["content"]}</div>', unsafe_allow_html=True)
+                else:
+                    st.markdown(f'<div class="chat-msg-ai"> &nbsp;{msg["content"]}</div>', unsafe_allow_html=True)
 
-    chat_input = st.text_input("", placeholder="Type your question...", key="chat_float", label_visibility="collapsed")
-    c1, c2 = st.columns([3, 1])
-    with c1:
-        send = st.button("Send ", key="send_float")
-    with c2:
-        if st.button("Clear ", key="clear_float"):
+    col1, col2, col3 = st.columns([5, 1, 1])
+    with col1:
+        user_input = st.text_input("", placeholder=" Ask anything...", key="chat_bottom", label_visibility="collapsed")
+    with col2:
+        send = st.button("Send ", key="send_bottom")
+    with col3:
+        if st.button("", key="clear_bottom"):
             st.session_state.chat_history = []
             st.rerun()
 
-    if send and chat_input:
-        st.session_state.chat_history.append({"role": "user", "content": chat_input})
+    if send and user_input:
+        st.session_state.chat_history.append({"role": "user", "content": user_input})
         with st.spinner(" Thinking..."):
             model = genai.GenerativeModel("gemini-2.5-flash")
             response = model.generate_content(f"""You are LuminaCheck AI Assistant, expert in image forensics and deepfake detection.
 Answer in 2-3 short sentences only.
-Question: {chat_input}""")
+Question: {user_input}""")
         st.session_state.chat_history.append({"role": "assistant", "content": response.text})
         st.rerun()
 
-# ── DETECT PAGE ──────────────────────────────────────────────
 if page == " Detect":
     col1, col2 = st.columns([1, 7])
     with col1:
@@ -267,7 +221,7 @@ if page == " Detect":
 
             if st.button(" Analyze Image Now"):
                 result_placeholder = st.empty()
-                for msg in [" Initializing forensic scanner...", "🧬 Loading AI model...", "🤖 Gemini AI analyzing...", "📊 Processing results..."]:
+                for msg in [" Initializing forensic scanner...", " Loading AI model...", " Gemini AI analyzing...", " Processing results..."]:
                     result_placeholder.markdown(f"""
                     <div style='text-align:center; padding:30px;'>
                         <div class='spinning-loader'></div>
@@ -317,6 +271,9 @@ Reason: [2-3 specific visual clues]"""
                     "Details": result[:120]
                 })
 
+    # Chat widget at bottom of detect page
+    show_chat_widget()
+
 elif page == " History":
     st.title(" Detection History")
     st.markdown("---")
@@ -328,11 +285,12 @@ elif page == " History":
     else:
         st.markdown("""
         <div style='text-align:center; padding:50px;'>
-            <p style='font-size:50px;'></p>
+            <p style='font-size:50px;'>📭</p>
             <p style='color:#8899aa; font-size:18px;'>No detections yet</p>
             <p style='color:#555; font-size:14px;'>Go to Detect page and upload an image!</p>
         </div>
         """, unsafe_allow_html=True)
+    show_chat_widget()
 
 elif page == " About":
     col1, col2 = st.columns([1, 8])
@@ -374,3 +332,4 @@ elif page == " About":
         <span class="tag"> github.com/codesbydevapriya</span>
     </div>
     """, unsafe_allow_html=True)
+    show_chat_widget()
