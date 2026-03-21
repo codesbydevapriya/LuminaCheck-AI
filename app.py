@@ -5,107 +5,101 @@ import google.generativeai as genai
 import pandas as pd
 from datetime import datetime
 import time
+import requests
+import io
 
 genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
+HIVE_API_KEY = os.environ.get("HIVE_API_KEY")
 
 st.set_page_config(page_title="LuminaCheck AI", page_icon="🔍", layout="wide")
 
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-* { font-family: 'Inter', sans-serif; }
-.stApp { background: #050a14 !important; }
-.orb { position: fixed; border-radius: 50%; filter: blur(60px); pointer-events: none; z-index: 0; opacity: 0.15; }
-.orb1 { width: 400px; height: 400px; background: #00d4aa; top: -100px; left: -100px; animation: orbFloat1 15s ease-in-out infinite; }
-.orb2 { width: 300px; height: 300px; background: #0099ff; bottom: -50px; right: -50px; animation: orbFloat2 12s ease-in-out infinite; }
-.orb3 { width: 200px; height: 200px; background: #c9a84c; top: 50%; left: 50%; animation: orbFloat3 18s ease-in-out infinite; }
-@keyframes orbFloat1 { 0%, 100% { transform: translate(0,0) scale(1); } 33% { transform: translate(100px,80px) scale(1.1); } 66% { transform: translate(-50px,150px) scale(0.9); } }
-@keyframes orbFloat2 { 0%, 100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-120px,-80px) scale(1.2); } }
-@keyframes orbFloat3 { 0%, 100% { transform: translate(-50%,-50%) scale(1); } 33% { transform: translate(-30%,-70%) scale(1.3); } 66% { transform: translate(-70%,-30%) scale(0.8); } }
-@keyframes twinkle { 0%, 100% { opacity: 0.3; transform: scale(1); } 50% { opacity: 1; transform: scale(1.5); } }
-@keyframes float { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-8px); } }
-@keyframes glow { 0%, 100% { box-shadow: 0 0 20px rgba(0,212,170,0.3); } 50% { box-shadow: 0 0 40px rgba(0,212,170,0.7); } }
-@keyframes slideIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+* { font-family: 'Inter', sans-serif; box-sizing: border-box; }
+.stApp { background: #f8fafc !important; }
+[data-testid="stSidebar"] { background: #ffffff !important; border-right: 1px solid #e2e8f0 !important; }
+[data-testid="stSidebar"] * { color: #1e293b !important; }
+.stButton>button { background: #0f172a !important; color: white !important; border-radius: 8px !important; padding: 12px 24px !important; font-size: 14px !important; font-weight: 600 !important; border: none !important; transition: all 0.2s ease !important; width: 100% !important; }
+.stButton>button:hover { background: #1e293b !important; transform: translateY(-1px) !important; box-shadow: 0 4px 12px rgba(15,23,42,0.3) !important; }
+h1 { color: #0f172a !important; font-size: 2.8rem !important; font-weight: 800 !important; letter-spacing: -1px !important; -webkit-text-fill-color: #0f172a !important; }
+[data-testid="stFileUploader"] { background: #ffffff !important; border: 2px dashed #cbd5e1 !important; border-radius: 16px !important; padding: 30px !important; transition: all 0.3s ease !important; }
+[data-testid="stFileUploader"]:hover { border-color: #6366f1 !important; box-shadow: 0 0 0 4px rgba(99,102,241,0.1) !important; }
+.hero-section { background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%); border-radius: 20px; padding: 50px 40px; margin-bottom: 30px; position: relative; overflow: hidden; }
+.hero-section::before { content: ''; position: absolute; top: -50%; right: -10%; width: 400px; height: 400px; background: radial-gradient(circle, rgba(99,102,241,0.3) 0%, transparent 70%); border-radius: 50%; }
+.ts-card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 24px; transition: all 0.2s ease; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+.ts-card:hover { border-color: #6366f1; box-shadow: 0 4px 20px rgba(99,102,241,0.15); transform: translateY(-2px); }
+.stat-number { font-size: 2.5rem; font-weight: 800; color: #ffffff; line-height: 1; margin: 0; }
+.stat-label { font-size: 13px; color: rgba(255,255,255,0.6); margin-top: 4px; }
+.ts-tag { display: inline-block; background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; border-radius: 6px; padding: 4px 12px; font-size: 12px; font-weight: 500; margin: 3px; }
+.verdict-real { background: #f0fdf4; border: 2px solid #22c55e; border-radius: 16px; padding: 30px; text-align: center; box-shadow: 0 0 30px rgba(34,197,94,0.15); animation: fadeIn 0.5s ease-out; }
+.verdict-fake { background: #fef2f2; border: 2px solid #ef4444; border-radius: 16px; padding: 30px; text-align: center; box-shadow: 0 0 30px rgba(239,68,68,0.15); animation: fadeIn 0.5s ease-out; }
+.verdict-badge-real { background: #22c55e; color: white; font-size: 18px; font-weight: 700; padding: 10px 28px; border-radius: 50px; display: inline-block; letter-spacing: 1px; margin-bottom: 15px; }
+.verdict-badge-fake { background: #ef4444; color: white; font-size: 18px; font-weight: 700; padding: 10px 28px; border-radius: 50px; display: inline-block; letter-spacing: 1px; margin-bottom: 15px; }
+.scan-container { border-radius: 16px; overflow: hidden; border: 2px solid #e2e8f0; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+.spinning-loader { width: 44px; height: 44px; border: 3px solid #e2e8f0; border-top: 3px solid #6366f1; border-radius: 50%; animation: rotate 0.8s linear infinite; margin: 0 auto; }
+.hive-score { background: linear-gradient(135deg, #0f172a, #1e293b); border-radius: 16px; padding: 20px; text-align: center; margin: 10px 0; }
+.chat-msg-user { background: #0f172a; color: white; border-radius: 18px 18px 4px 18px; padding: 12px 18px; margin: 8px 0; margin-left: 20%; font-size: 14px; }
+.chat-msg-ai { background: #ffffff; border: 1px solid #e2e8f0; color: #334155; border-radius: 18px 18px 18px 4px; padding: 12px 18px; margin: 8px 0; margin-right: 20%; font-size: 14px; line-height: 1.7; }
+.chat-widget { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 20px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+.chat-header { background: #0f172a; padding: 16px 20px; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-@keyframes redPulse { 0%, 100% { box-shadow: 0 0 30px rgba(255,59,48,0.4); } 50% { box-shadow: 0 0 60px rgba(255,59,48,0.8); } }
-@keyframes greenPulse { 0%, 100% { box-shadow: 0 0 30px rgba(0,212,170,0.4); } 50% { box-shadow: 0 0 60px rgba(0,212,170,0.8); } }
-[data-testid="stSidebar"] { background: linear-gradient(180deg, #0d1421 0%, #111827 100%) !important; border-right: 1px solid #1e3a5f; }
-.stButton>button { background: linear-gradient(135deg, #00d4aa, #0099ff) !important; color: white !important; border-radius: 12px !important; padding: 14px 28px !important; font-size: 15px !important; font-weight: 600 !important; border: none !important; box-shadow: 0 0 20px rgba(0,212,170,0.3) !important; transition: all 0.3s ease !important; width: 100% !important; }
-.stButton>button:hover { transform: translateY(-3px) !important; box-shadow: 0 0 35px rgba(0,212,170,0.6) !important; }
-h1 { background: linear-gradient(135deg, #00d4aa, #0099ff, #c9a84c); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size: 2.8rem !important; font-weight: 700 !important; }
-[data-testid="stFileUploader"] { background: linear-gradient(135deg, rgba(0,212,170,0.05), rgba(0,153,255,0.05)) !important; border: 2px dashed #00d4aa !important; border-radius: 20px !important; padding: 20px !important; transition: all 0.3s ease !important; }
-[data-testid="stFileUploader"]:hover { border-color: #0099ff !important; background: linear-gradient(135deg, rgba(0,212,170,0.1), rgba(0,153,255,0.1)) !important; box-shadow: 0 0 25px rgba(0,212,170,0.2) !important; }
-.hero-logo { animation: float 3s ease-in-out infinite; display: inline-block; }
-.sidebar-logo { animation: float 4s ease-in-out infinite; }
-.scan-container { position: relative; overflow: hidden; border-radius: 16px; border: 2px solid #00d4aa; animation: glow 2s ease-in-out infinite; }
-.stat-card { background: linear-gradient(135deg, rgba(13,20,33,0.8), rgba(17,24,39,0.8)); border: 1px solid #1e3a5f; border-radius: 16px; padding: 20px; text-align: center; transition: all 0.3s ease; animation: slideIn 0.5s ease-out; backdrop-filter: blur(10px); }
-.stat-card:hover { border-color: #00d4aa; transform: translateY(-5px); box-shadow: 0 10px 30px rgba(0,212,170,0.2); }
-.spinning-loader { width: 50px; height: 50px; border: 4px solid #1e3a5f; border-top: 4px solid #00d4aa; border-radius: 50%; animation: rotate 1s linear infinite; margin: 0 auto; }
-.tag { display: inline-block; background: rgba(0,212,170,0.15); border: 1px solid #00d4aa; color: #00d4aa; border-radius: 20px; padding: 4px 12px; font-size: 12px; font-weight: 500; margin: 3px; }
-.verdict-real { background: linear-gradient(135deg, rgba(0,212,170,0.2), rgba(0,153,255,0.1)); border: 3px solid #00d4aa; border-radius: 20px; padding: 30px; text-align: center; animation: greenPulse 2s ease-in-out infinite, slideIn 0.6s ease-out; }
-.verdict-fake { background: linear-gradient(135deg, rgba(255,59,48,0.2), rgba(255,100,50,0.1)); border: 3px solid #ff3b30; border-radius: 20px; padding: 30px; text-align: center; animation: redPulse 2s ease-in-out infinite, slideIn 0.6s ease-out; }
-.verdict-badge-real { background: #00d4aa; color: #050a14; font-size: 22px; font-weight: 800; padding: 12px 30px; border-radius: 50px; display: inline-block; letter-spacing: 2px; margin-bottom: 15px; }
-.verdict-badge-fake { background: #ff3b30; color: white; font-size: 22px; font-weight: 800; padding: 12px 30px; border-radius: 50px; display: inline-block; letter-spacing: 2px; margin-bottom: 15px; }
-.star { position: fixed; width: 2px; height: 2px; background: white; border-radius: 50%; animation: twinkle ease-in-out infinite; pointer-events: none; z-index: 0; }
-.chat-msg-user { background: linear-gradient(135deg, #00d4aa, #0099ff); color: #050a14; border-radius: 18px 18px 4px 18px; padding: 12px 18px; margin: 8px 0; margin-left: 20%; font-size: 14px; font-weight: 500; animation: slideIn 0.3s ease-out; }
-.chat-msg-ai { background: linear-gradient(135deg, rgba(13,20,33,0.95), rgba(17,24,39,0.95)); border: 1px solid #1e3a5f; color: #e0e0e0; border-radius: 18px 18px 18px 4px; padding: 12px 18px; margin: 8px 0; margin-right: 20%; font-size: 14px; line-height: 1.7; animation: slideIn 0.3s ease-out; }
-.chat-widget { background: linear-gradient(135deg, rgba(13,20,33,0.95), rgba(17,24,39,0.95)); border: 1px solid #1e3a5f; border-radius: 20px; overflow: hidden; box-shadow: 0 0 30px rgba(0,212,170,0.1); animation: slideIn 0.5s ease-out; }
-.chat-header { background: linear-gradient(135deg, #00d4aa, #0099ff); padding: 15px 20px; }
 </style>
-
-<div class="orb orb1"></div>
-<div class="orb orb2"></div>
-<div class="orb orb3"></div>
-<div class="star" style="top:5%;left:10%;animation-duration:2s;"></div>
-<div class="star" style="top:15%;left:25%;animation-duration:3s;animation-delay:0.5s;width:3px;height:3px;background:#00d4aa;"></div>
-<div class="star" style="top:8%;left:45%;animation-duration:2.5s;animation-delay:1s;"></div>
-<div class="star" style="top:20%;left:65%;animation-duration:4s;animation-delay:0.3s;width:3px;height:3px;background:#0099ff;"></div>
-<div class="star" style="top:35%;left:5%;animation-duration:3s;animation-delay:0.8s;width:3px;height:3px;background:#c9a84c;"></div>
-<div class="star" style="top:60%;left:15%;animation-duration:3.5s;animation-delay:1.2s;width:3px;height:3px;background:#00d4aa;"></div>
-<div class="star" style="top:80%;left:55%;animation-duration:4s;animation-delay:0.9s;width:3px;height:3px;background:#0099ff;"></div>
 """, unsafe_allow_html=True)
 
-LOGO_SVG = """<svg width="55" height="55" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+LOGO_SVG = """<svg width="36" height="36" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
   <defs><radialGradient id="g1" cx="50%" cy="50%" r="50%">
-    <stop offset="0%" style="stop-color:#00d4aa"/>
-    <stop offset="100%" style="stop-color:#0099ff"/>
+    <stop offset="0%" style="stop-color:#6366f1"/>
+    <stop offset="100%" style="stop-color:#06b6d4"/>
   </radialGradient></defs>
-  <circle cx="90" cy="90" r="72" fill="#0d1421"/>
+  <circle cx="90" cy="90" r="72" fill="#0f172a"/>
   <circle cx="90" cy="90" r="72" fill="none" stroke="url(#g1)" stroke-width="5"/>
-  <circle cx="90" cy="90" r="72" fill="none" stroke="#c9a84c" stroke-width="1.5" stroke-dasharray="8,6" opacity="0.4"/>
   <ellipse cx="90" cy="90" rx="32" ry="32" fill="url(#g1)"/>
-  <ellipse cx="90" cy="90" rx="19" ry="19" fill="#0d1421"/>
+  <ellipse cx="90" cy="90" rx="19" ry="19" fill="#0f172a"/>
   <ellipse cx="90" cy="90" rx="10" ry="10" fill="url(#g1)" opacity="0.7"/>
-  <circle cx="99" cy="81" r="6" fill="white" opacity="0.9"/>
-  <line x1="132" y1="132" x2="158" y2="158" stroke="#c9a84c" stroke-width="11" stroke-linecap="round"/>
-  <line x1="132" y1="132" x2="158" y2="158" stroke="url(#g1)" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="99" cy="81" r="5" fill="white" opacity="0.9"/>
+  <line x1="132" y1="132" x2="155" y2="155" stroke="#6366f1" stroke-width="10" stroke-linecap="round"/>
 </svg>"""
 
-LOGO_BIG = """<svg width="80" height="80" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-  <defs><radialGradient id="g2" cx="50%" cy="50%" r="50%">
-    <stop offset="0%" style="stop-color:#00d4aa"/>
-    <stop offset="100%" style="stop-color:#0099ff"/>
-  </radialGradient></defs>
-  <circle cx="90" cy="90" r="72" fill="#0d1421"/>
-  <circle cx="90" cy="90" r="72" fill="none" stroke="url(#g2)" stroke-width="5"/>
-  <circle cx="90" cy="90" r="72" fill="none" stroke="#c9a84c" stroke-width="1.5" stroke-dasharray="8,6" opacity="0.4"/>
-  <ellipse cx="90" cy="90" rx="32" ry="32" fill="url(#g2)"/>
-  <ellipse cx="90" cy="90" rx="19" ry="19" fill="#0d1421"/>
-  <ellipse cx="90" cy="90" rx="10" ry="10" fill="url(#g2)" opacity="0.7"/>
-  <circle cx="99" cy="81" r="6" fill="white" opacity="0.9"/>
-  <line x1="132" y1="132" x2="158" y2="158" stroke="#c9a84c" stroke-width="11" stroke-linecap="round"/>
-  <line x1="132" y1="132" x2="158" y2="158" stroke="url(#g2)" stroke-width="6" stroke-linecap="round"/>
-</svg>"""
+def detect_with_hive(image_bytes):
+    try:
+        response = requests.post(
+            "https://api.thehive.ai/api/v2/task/sync",
+            headers={"Authorization": f"Token {HIVE_API_KEY}"},
+            files={"image": ("image.jpg", image_bytes, "image/jpeg")},
+            data={"model": "ai_generated_image_detection"}
+        )
+        if response.status_code == 200:
+            data = response.json()
+            classes = data["status"][0]["response"]["output"][0]["classes"]
+            ai_score = 0
+            real_score = 0
+            for c in classes:
+                if c["class"] == "ai_generated":
+                    ai_score = c["score"]
+                elif c["class"] == "real":
+                    real_score = c["score"]
+            return ai_score, real_score
+    except:
+        pass
+    return None, None
 
-page = st.sidebar.radio("Navigation", ["Detect", "History", "About"])
-st.sidebar.markdown("---")
-st.sidebar.markdown(f'<div class="sidebar-logo">{LOGO_SVG}</div>', unsafe_allow_html=True)
-st.sidebar.markdown("<p style='color:#00d4aa; font-weight:700; font-size:17px; margin:5px 0;'>LuminaCheck AI</p>", unsafe_allow_html=True)
-st.sidebar.markdown("<p style='color:#555; font-size:12px; font-style:italic;'>Where Light Reveals Truth</p>", unsafe_allow_html=True)
-st.sidebar.markdown("---")
-st.sidebar.markdown("<p style='color:#8899aa; font-size:12px;'>Upload any image to detect if it is REAL or FAKE using advanced AI forensics.</p>", unsafe_allow_html=True)
-st.sidebar.markdown("---")
-st.sidebar.markdown("<p style='color:#333; font-size:11px; text-align:center;'>Powered by Google Gemini AI</p>", unsafe_allow_html=True)
+st.sidebar.markdown(f"""
+<div style='display:flex; align-items:center; gap:10px; padding:10px 0; margin-bottom:10px;'>
+    {LOGO_SVG}
+    <div>
+        <p style='color:#0f172a; font-weight:700; font-size:16px; margin:0;'>LuminaCheck AI</p>
+        <p style='color:#64748b; font-size:11px; margin:0;'>Image Authentication</p>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+st.sidebar.markdown("<hr style='border-color:#e2e8f0; margin:10px 0;'>", unsafe_allow_html=True)
+page = st.sidebar.radio("", ["Detect", "History", "About"], label_visibility="collapsed")
+st.sidebar.markdown("<hr style='border-color:#e2e8f0; margin:10px 0;'>", unsafe_allow_html=True)
+st.sidebar.markdown("<p style='color:#64748b; font-size:12px;'>Upload any image to detect if it is REAL or FAKE using advanced AI forensics.</p>", unsafe_allow_html=True)
+st.sidebar.markdown("<p style='color:#94a3b8; font-size:11px; margin-top:20px;'>Powered by Hive AI + Google Gemini</p>", unsafe_allow_html=True)
 
 if "history" not in st.session_state:
     st.session_state.history = []
@@ -113,22 +107,22 @@ if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
 def show_chat_widget():
-    st.markdown("<br><br>", unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
     st.markdown("""
     <div class="chat-widget">
         <div class="chat-header">
-            <p style='color:white; font-weight:700; font-size:16px; margin:0;'>LuminaCheck AI Assistant</p>
-            <p style='color:rgba(255,255,255,0.8); font-size:12px; margin:0;'>Powered by Gemini AI</p>
+            <p style='color:white; font-weight:700; font-size:15px; margin:0;'>AI Assistant</p>
+            <p style='color:rgba(255,255,255,0.5); font-size:11px; margin:0;'>Ask anything about image forensics</p>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
     if not st.session_state.chat_history:
         st.markdown("""
-        <div style='padding:15px; text-align:center; background:rgba(13,20,33,0.8); border:1px solid #1e3a5f; border-radius:0 0 16px 16px;'>
-            <p style='color:#8899aa; font-size:13px;'>Ask me anything about image detection, deepfakes, or AI!</p>
-            <span class="tag">What is a deepfake?</span>
-            <span class="tag">How does AI detect fake images?</span>
+        <div style='background:#f8fafc; border:1px solid #e2e8f0; border-top:none; border-radius:0 0 16px 16px; padding:20px; text-align:center;'>
+            <p style='color:#64748b; font-size:13px; margin-bottom:10px;'>Ask me anything about image detection!</p>
+            <span class="ts-tag">What is a deepfake?</span>
+            <span class="ts-tag">How does AI detect fake images?</span>
         </div>
         """, unsafe_allow_html=True)
     else:
@@ -159,39 +153,63 @@ Question: {user_input}""")
         st.rerun()
 
 if page == "Detect":
-    col1, col2 = st.columns([1, 7])
-    with col1:
-        st.markdown(f'<div class="hero-logo">{LOGO_BIG}</div>', unsafe_allow_html=True)
-    with col2:
-        st.title("LuminaCheck AI")
-        st.markdown("<p style='color:#8899aa; font-size:16px; margin-top:-10px;'>Advanced AI-Powered Image Authenticity Detection</p>", unsafe_allow_html=True)
-        st.markdown("""
-        <span class="tag">Gemini AI</span>
-        <span class="tag">Forensic Analysis</span>
-        <span class="tag">Real-time</span>
-        <span class="tag">Secure</span>
-        """, unsafe_allow_html=True)
+    st.markdown(f"""
+    <div class="hero-section">
+        <div style='position:relative; z-index:1;'>
+            <div style='display:flex; align-items:center; gap:15px; margin-bottom:20px;'>
+                <div>
+                    <p style='color:rgba(255,255,255,0.6); font-size:13px; margin:0; letter-spacing:2px; text-transform:uppercase;'>AI Image Detection</p>
+                    <h1 style='color:white !important; font-size:2.5rem; font-weight:800; margin:4px 0 0 0; -webkit-text-fill-color:white !important;'>LuminaCheck AI</h1>
+                </div>
+            </div>
+            <p style='color:rgba(255,255,255,0.7); font-size:16px; margin:0 0 25px 0; max-width:600px;'>
+                Dual-engine AI image authentication using Hive AI + Google Gemini. Detect REAL, FAKE, or AI-GENERATED images with high accuracy.
+            </p>
+            <div style='display:flex; gap:30px; flex-wrap:wrap;'>
+                <div>
+                    <p class='stat-number'>Hive AI</p>
+                    <p class='stat-label'>Specialized Detection</p>
+                </div>
+                <div style='width:1px; background:rgba(255,255,255,0.1);'></div>
+                <div>
+                    <p class='stat-number'>Gemini</p>
+                    <p class='stat-label'>Detailed Analysis</p>
+                </div>
+                <div style='width:1px; background:rgba(255,255,255,0.1);'></div>
+                <div>
+                    <p class='stat-number'>Free</p>
+                    <p class='stat-label'>No Cost Detection</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-    st.markdown("<br>", unsafe_allow_html=True)
     c1, c2, c3 = st.columns(3)
     with c1:
-        st.markdown("""<div class="stat-card">
-            <h2 style='color:#00d4aa; font-size:2rem; margin:0;'>AI</h2>
-            <p style='color:#8899aa; margin:5px 0 0 0; font-size:13px;'>Powered Detection</p>
+        st.markdown("""<div class="ts-card">
+            <p style='color:#6366f1; font-weight:700; font-size:15px; margin:0;'>Hive AI Engine</p>
+            <p style='color:#64748b; font-size:13px; margin:6px 0 0 0;'>Specialized AI image detection model</p>
         </div>""", unsafe_allow_html=True)
     with c2:
-        st.markdown("""<div class="stat-card">
-            <h2 style='color:#0099ff; font-size:2rem; margin:0;'>95%</h2>
-            <p style='color:#8899aa; margin:5px 0 0 0; font-size:13px;'>Accuracy Rate</p>
+        st.markdown("""<div class="ts-card">
+            <p style='color:#06b6d4; font-weight:700; font-size:15px; margin:0;'>Gemini Vision</p>
+            <p style='color:#64748b; font-size:13px; margin:6px 0 0 0;'>Detailed forensic visual reasoning</p>
         </div>""", unsafe_allow_html=True)
     with c3:
-        st.markdown("""<div class="stat-card">
-            <h2 style='color:#c9a84c; font-size:2rem; margin:0;'>Fast</h2>
-            <p style='color:#8899aa; margin:5px 0 0 0; font-size:13px;'>Instant Results</p>
+        st.markdown("""<div class="ts-card">
+            <p style='color:#10b981; font-weight:700; font-size:15px; margin:0;'>Dual Verdict</p>
+            <p style='color:#64748b; font-size:13px; margin:6px 0 0 0;'>Combined accuracy from two AI engines</p>
         </div>""", unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown("<p style='color:#8899aa; font-size:14px;'>Upload Image</p>", unsafe_allow_html=True)
+    st.markdown("""
+    <div class="ts-card" style='margin-bottom:20px;'>
+        <p style='color:#0f172a; font-weight:700; font-size:16px; margin:0 0 5px 0;'>Upload Image</p>
+        <p style='color:#64748b; font-size:13px; margin:0;'>Supports JPG, JPEG, PNG up to 200MB</p>
+    </div>
+    """, unsafe_allow_html=True)
+
     uploaded_file = st.file_uploader("", type=["jpg", "jpeg", "png"], label_visibility="collapsed")
 
     if uploaded_file is not None:
@@ -203,75 +221,134 @@ if page == "Detect":
             st.image(image, use_container_width=True)
             st.markdown('</div>', unsafe_allow_html=True)
         with col2:
-            st.markdown("<br>", unsafe_allow_html=True)
             st.markdown(f"""
-            <div class="stat-card">
-                <p style='color:#00d4aa; font-weight:600; font-size:15px; margin:0;'>File Details</p>
-                <hr style='border-color:#1e3a5f; margin:10px 0;'>
-                <p style='color:#8899aa; font-size:13px; margin:5px 0;'>Name: <b style='color:#fff;'>{uploaded_file.name}</b></p>
-                <p style='color:#8899aa; font-size:13px; margin:5px 0;'>Size: <b style='color:#fff;'>{uploaded_file.size / 1024:.1f} KB</b></p>
-                <p style='color:#00d4aa; font-size:13px; margin:5px 0;'>Ready for analysis</p>
+            <div class="ts-card" style='height:100%;'>
+                <p style='color:#0f172a; font-weight:700; font-size:15px; margin:0 0 15px 0;'>File Details</p>
+                <div style='background:#f8fafc; border-radius:8px; padding:12px; margin-bottom:10px;'>
+                    <p style='color:#64748b; font-size:12px; margin:0;'>File Name</p>
+                    <p style='color:#0f172a; font-weight:600; font-size:14px; margin:4px 0 0 0;'>{uploaded_file.name}</p>
+                </div>
+                <div style='background:#f8fafc; border-radius:8px; padding:12px; margin-bottom:10px;'>
+                    <p style='color:#64748b; font-size:12px; margin:0;'>File Size</p>
+                    <p style='color:#0f172a; font-weight:600; font-size:14px; margin:4px 0 0 0;'>{uploaded_file.size / 1024:.1f} KB</p>
+                </div>
+                <div style='background:#f0fdf4; border:1px solid #86efac; border-radius:8px; padding:12px;'>
+                    <p style='color:#166534; font-weight:600; font-size:13px; margin:0;'>Ready for analysis</p>
+                </div>
             </div>
             """, unsafe_allow_html=True)
             st.markdown("<br>", unsafe_allow_html=True)
 
-            if st.button("Analyze Image Now"):
+            if st.button("Analyze Image"):
                 result_placeholder = st.empty()
-                for msg in ["Initializing forensic scanner...", "Loading AI model...", "Gemini AI analyzing...", "Processing results..."]:
-                    result_placeholder.markdown(f"""
-                    <div style='text-align:center; padding:30px;'>
-                        <div class='spinning-loader'></div>
-                        <p style='color:#00d4aa; font-size:16px; margin-top:20px; font-weight:600;'>{msg}</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    time.sleep(0.8)
+
+                # Step 1 - Hive AI
+                result_placeholder.markdown("""
+                <div style='text-align:center; padding:30px; background:#f8fafc; border-radius:16px;'>
+                    <div class='spinning-loader'></div>
+                    <p style='color:#6366f1; font-size:15px; margin-top:16px; font-weight:600;'>Hive AI scanning image...</p>
+                </div>
+                """, unsafe_allow_html=True)
+
+                img_bytes = io.BytesIO()
+                image.save(img_bytes, format="JPEG")
+                img_bytes.seek(0)
+                hive_ai_score, hive_real_score = detect_with_hive(img_bytes.getvalue())
+
+                # Step 2 - Gemini AI
+                result_placeholder.markdown("""
+                <div style='text-align:center; padding:30px; background:#f8fafc; border-radius:16px;'>
+                    <div class='spinning-loader'></div>
+                    <p style='color:#6366f1; font-size:15px; margin-top:16px; font-weight:600;'>Gemini AI analyzing details...</p>
+                </div>
+                """, unsafe_allow_html=True)
 
                 model = genai.GenerativeModel("gemini-2.5-flash")
                 response = model.generate_content([
                     image,
                     """You are a forensic image authentication expert.
 Analyze this image and determine if it is REAL or AI-GENERATED/FAKE.
-Check for: unnatural skin, perfect symmetry, distorted hands, impossible lighting, overly perfect features, fake background blur.
-Be strict but fair. Only say REAL if 100% sure it is a genuine photograph.
+Check for: unnatural skin, perfect symmetry, distorted hands, impossible lighting, overly perfect features.
 Reply ONLY in this exact format:
 Verdict: [REAL or AI-GENERATED or FAKE]
 Confidence: [0-100%]
 Reason: [2-3 specific visual clues]"""
                 ])
-                result = response.text
+                gemini_result = response.text
                 result_placeholder.empty()
 
-                if "FAKE" in result.upper() or "AI-GENERATED" in result.upper():
-                    verdict = "FAKE/AI-GENERATED"
+                # Final verdict
+                st.markdown("---")
+
+                # Hive Score Display
+                if hive_ai_score is not None:
+                    hive_percent = round(hive_ai_score * 100)
+                    real_percent = round(hive_real_score * 100)
+
                     st.markdown(f"""
-                    <div class="verdict-fake">
-                        <div style='font-size:60px; margin-bottom:10px;'>!</div>
-                        <div class="verdict-badge-fake">FAKE / AI-GENERATED</div>
-                        <p style='color:#ffaa99; font-size:14px; margin-top:15px; line-height:1.7;'>{result}</p>
+                    <div class="ts-card" style='margin-bottom:15px;'>
+                        <p style='color:#0f172a; font-weight:700; font-size:15px; margin:0 0 15px 0;'>Hive AI Detection Score</p>
+                        <div style='display:flex; gap:20px;'>
+                            <div style='flex:1; background:#fef2f2; border-radius:12px; padding:15px; text-align:center;'>
+                                <p style='color:#ef4444; font-size:28px; font-weight:800; margin:0;'>{hive_percent}%</p>
+                                <p style='color:#64748b; font-size:12px; margin:4px 0 0 0;'>AI Generated Probability</p>
+                            </div>
+                            <div style='flex:1; background:#f0fdf4; border-radius:12px; padding:15px; text-align:center;'>
+                                <p style='color:#22c55e; font-size:28px; font-weight:800; margin:0;'>{real_percent}%</p>
+                                <p style='color:#64748b; font-size:12px; margin:4px 0 0 0;'>Real Image Probability</p>
+                            </div>
+                        </div>
                     </div>
                     """, unsafe_allow_html=True)
+
+                    # Combined verdict
+                    if hive_ai_score > 0.5:
+                        verdict = "FAKE/AI-GENERATED"
+                        st.markdown(f"""
+                        <div class="verdict-fake">
+                            <div class="verdict-badge-fake">FAKE / AI-GENERATED</div>
+                            <p style='color:#7f1d1d; font-size:14px; margin-top:15px; line-height:1.7;'>{gemini_result}</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    else:
+                        verdict = "REAL"
+                        st.markdown(f"""
+                        <div class="verdict-real">
+                            <div class="verdict-badge-real">REAL IMAGE VERIFIED</div>
+                            <p style='color:#14532d; font-size:14px; margin-top:15px; line-height:1.7;'>{gemini_result}</p>
+                        </div>
+                        """, unsafe_allow_html=True)
                 else:
-                    verdict = "REAL"
-                    st.markdown(f"""
-                    <div class="verdict-real">
-                        <div style='font-size:60px; margin-bottom:10px;'>✓</div>
-                        <div class="verdict-badge-real">REAL IMAGE VERIFIED</div>
-                        <p style='color:#99ffee; font-size:14px; margin-top:15px; line-height:1.7;'>{result}</p>
-                    </div>
-                    """, unsafe_allow_html=True)
+                    # Fallback to Gemini only
+                    if "FAKE" in gemini_result.upper() or "AI-GENERATED" in gemini_result.upper():
+                        verdict = "FAKE/AI-GENERATED"
+                        st.markdown(f"""
+                        <div class="verdict-fake">
+                            <div class="verdict-badge-fake">FAKE / AI-GENERATED</div>
+                            <p style='color:#7f1d1d; font-size:14px; margin-top:15px; line-height:1.7;'>{gemini_result}</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    else:
+                        verdict = "REAL"
+                        st.markdown(f"""
+                        <div class="verdict-real">
+                            <div class="verdict-badge-real">REAL IMAGE VERIFIED</div>
+                            <p style='color:#14532d; font-size:14px; margin-top:15px; line-height:1.7;'>{gemini_result}</p>
+                        </div>
+                        """, unsafe_allow_html=True)
 
                 st.session_state.history.append({
                     "Time": datetime.now().strftime("%H:%M:%S"),
                     "File": uploaded_file.name,
                     "Result": verdict,
-                    "Details": result[:120]
+                    "Details": gemini_result[:120]
                 })
 
     show_chat_widget()
 
 elif page == "History":
-    st.title("Detection History")
-    st.markdown("---")
+    st.markdown("""<h1 style='color:#0f172a !important; -webkit-text-fill-color:#0f172a !important;'>Detection History</h1>""", unsafe_allow_html=True)
+    st.markdown("<hr style='border-color:#e2e8f0;'>", unsafe_allow_html=True)
     if st.session_state.history:
         df = pd.DataFrame(st.session_state.history)
         st.dataframe(df, use_container_width=True)
@@ -279,51 +356,45 @@ elif page == "History":
         st.download_button("Download Report (CSV)", csv, "lumina_report.csv", "text/csv")
     else:
         st.markdown("""
-        <div style='text-align:center; padding:50px;'>
-            <p style='color:#8899aa; font-size:18px;'>No detections yet</p>
-            <p style='color:#555; font-size:14px;'>Go to Detect page and upload an image!</p>
+        <div class="ts-card" style='text-align:center; padding:50px;'>
+            <p style='color:#64748b; font-size:18px; font-weight:600; margin:0;'>No detections yet</p>
+            <p style='color:#94a3b8; font-size:14px;'>Go to Detect page and upload an image</p>
         </div>
         """, unsafe_allow_html=True)
     show_chat_widget()
 
 elif page == "About":
-    col1, col2 = st.columns([1, 8])
-    with col1:
-        st.markdown(f'<div class="hero-logo">{LOGO_BIG}</div>', unsafe_allow_html=True)
-    with col2:
-        st.title("About LuminaCheck AI")
-    st.markdown("---")
+    st.markdown("""<h1 style='color:#0f172a !important; -webkit-text-fill-color:#0f172a !important;'>About LuminaCheck AI</h1>""", unsafe_allow_html=True)
+    st.markdown("<hr style='border-color:#e2e8f0;'>", unsafe_allow_html=True)
     c1, c2 = st.columns(2)
     with c1:
         st.markdown("""
-        <div class="stat-card">
-            <h3 style='color:#00d4aa;'>What is LuminaCheck AI?</h3>
-            <p style='color:#8899aa; font-size:14px; line-height:1.7;'>
-            LuminaCheck AI is a Final Year BCA Project that uses Google Gemini Vision AI to detect whether a digital image is REAL, FAKE, or AI-GENERATED.
+        <div class="ts-card">
+            <p style='color:#6366f1; font-weight:700; font-size:15px; margin:0 0 10px 0;'>What is LuminaCheck AI?</p>
+            <p style='color:#475569; font-size:14px; line-height:1.7; margin:0;'>
+            LuminaCheck AI uses dual AI engines — Hive AI and Google Gemini — to detect whether a digital image is REAL, FAKE, or AI-GENERATED with high accuracy.
             </p>
         </div>
         """, unsafe_allow_html=True)
     with c2:
         st.markdown("""
-        <div class="stat-card">
-            <h3 style='color:#0099ff;'>Technologies Used</h3>
-            <p style='color:#8899aa; font-size:14px; line-height:1.8;'>
+        <div class="ts-card">
+            <p style='color:#06b6d4; font-weight:700; font-size:15px; margin:0 0 10px 0;'>Technologies Used</p>
+            <p style='color:#475569; font-size:14px; line-height:2; margin:0;'>
             Python | Streamlit<br>
-            Google Gemini AI<br>
-            Pillow | Pandas<br>
+            Hive AI (Specialized Detection)<br>
+            Google Gemini AI (Analysis)<br>
             Streamlit Cloud
             </p>
         </div>
         """, unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
     st.markdown("""
-    <div class="stat-card" style='text-align:center;'>
-        <h3 style='color:#c9a84c;'>Developed By</h3>
-        <p style='color:#fff; font-size:20px; font-weight:600;'>Devapriya</p>
-        <p style='color:#8899aa;'>BCA Final Year Student | March 2026</p>
-        <br>
-        <span class="tag">luminacheck-ai.streamlit.app</span>
-        <span class="tag">github.com/codesbydevapriya</span>
+    <div class="ts-card" style='text-align:center; background:linear-gradient(135deg,#0f172a,#1e293b); border:none;'>
+        <p style='color:#94a3b8; font-size:13px; margin:0 0 5px 0;'>Developed By</p>
+        <p style='color:#ffffff; font-size:22px; font-weight:700; margin:0;'>Devapriya</p>
+        <p style='color:#64748b; font-size:13px; margin:5px 0 15px 0;'>BCA Final Year Student | March 2026</p>
+        <span class="ts-tag" style='background:rgba(255,255,255,0.1); color:#94a3b8; border-color:rgba(255,255,255,0.1);'>luminacheck-ai.streamlit.app</span>
     </div>
     """, unsafe_allow_html=True)
     show_chat_widget()
