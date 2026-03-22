@@ -8,11 +8,17 @@ import requests
 import streamlit as st
 from PIL import Image
 
-HIVE_API_KEY = os.environ.get("HIVE_API_KEY")
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+# ---------------------------
+# API KEYS
+# ---------------------------
+HIVE_API_KEY = st.secrets.get("HIVE_API_KEY", os.environ.get("HIVE_API_KEY", "")).strip()
+GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", os.environ.get("GEMINI_API_KEY", "")).strip()
 
 st.set_page_config(page_title="LuminaCheck AI", page_icon="🔍", layout="wide")
 
+# ---------------------------
+# STYLES
+# ---------------------------
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
@@ -202,7 +208,9 @@ LOGO_SVG = """<svg width="36" height="36" viewBox="0 0 200 200" xmlns="http://ww
   <line x1="132" y1="132" x2="155" y2="155" stroke="#6366f1" stroke-width="10" stroke-linecap="round"/>
 </svg>"""
 
-
+# ---------------------------
+# HELPERS
+# ---------------------------
 def prepare_image_for_api(image: Image.Image) -> bytes:
     if image.mode in ("RGBA", "LA", "P"):
         image = image.convert("RGB")
@@ -217,7 +225,7 @@ def prepare_image_for_api(image: Image.Image) -> bytes:
 
 def detect_with_hive(image_bytes):
     if not HIVE_API_KEY:
-        return None, None, "Missing HIVE_API_KEY environment variable."
+        return None, None, "Hive API key is missing. Add HIVE_API_KEY in Streamlit secrets."
 
     try:
         response = requests.post(
@@ -227,6 +235,8 @@ def detect_with_hive(image_bytes):
             timeout=20
         )
 
+        if response.status_code == 403:
+            return None, None, "Hive authentication failed: Invalid API token. Check HIVE_API_KEY in your Streamlit secrets."
         if response.status_code != 200:
             return None, None, f"API Error {response.status_code}: {response.text[:300]}"
 
@@ -252,7 +262,7 @@ def detect_with_hive(image_bytes):
                 real_score = max(real_score or 0, score)
 
         if ai_score is None and real_score is None:
-            return None, None, "Could not parse Hive AI response."
+            return None, None, "Could not parse Hive response."
 
         if ai_score is None and real_score is not None:
             ai_score = max(0.0, 1 - real_score)
@@ -269,6 +279,9 @@ def detect_with_hive(image_bytes):
         return None, None, f"Unexpected error: {str(e)}"
 
 
+# ---------------------------
+# SIDEBAR
+# ---------------------------
 st.sidebar.markdown(f"""
 <div style='display:flex; align-items:center; gap:10px; padding:10px 0; margin-bottom:10px;'>
     {LOGO_SVG}
@@ -288,12 +301,17 @@ st.sidebar.markdown(
 )
 st.sidebar.markdown("<p style='color:#94a3b8; font-size:11px; margin-top:20px;'>Powered by Hive AI</p>", unsafe_allow_html=True)
 
+# ---------------------------
+# SESSION STATE
+# ---------------------------
 if "history" not in st.session_state:
     st.session_state.history = []
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
-
+# ---------------------------
+# CHAT WIDGET
+# ---------------------------
 def show_chat_widget():
     st.markdown("<br>", unsafe_allow_html=True)
     st.markdown("""
@@ -332,11 +350,12 @@ def show_chat_widget():
             st.rerun()
 
     if send and user_input:
+        st.session_state.chat_history.append({"role": "user", "content": user_input})
+
         if not GEMINI_API_KEY:
-            st.session_state.chat_history.append({"role": "user", "content": user_input})
             st.session_state.chat_history.append({
                 "role": "assistant",
-                "content": "Chat assistant is unavailable because the Gemini API key is missing."
+                "content": "Gemini API key is missing. Add GEMINI_API_KEY in Streamlit secrets."
             })
             st.rerun()
 
@@ -344,7 +363,6 @@ def show_chat_widget():
             import google.generativeai as genai
 
             genai.configure(api_key=GEMINI_API_KEY)
-            st.session_state.chat_history.append({"role": "user", "content": user_input})
 
             with st.spinner("Thinking..."):
                 model = genai.GenerativeModel("gemini-2.5-flash")
@@ -360,10 +378,16 @@ Question: {user_input}"""
             st.rerun()
 
         except Exception:
-            st.session_state.chat_history.append({"role": "assistant", "content": "The chat assistant is temporarily unavailable."})
+            st.session_state.chat_history.append({
+                "role": "assistant",
+                "content": "The chat assistant is temporarily unavailable."
+            })
             st.rerun()
 
 
+# ---------------------------
+# DETECT PAGE
+# ---------------------------
 if page == "Detect":
     st.markdown("""
     <div class="hero-section">
@@ -385,16 +409,19 @@ if page == "Detect":
     """, unsafe_allow_html=True)
 
     c1, c2, c3 = st.columns(3)
+
     with c1:
         st.markdown("""<div class="ts-card">
             <p style='color:#6366f1; font-weight:700; font-size:15px; margin:0;'>Hive AI Engine</p>
             <p style='color:#64748b; font-size:13px; margin:6px 0 0 0;'>Specialized AI image detection model</p>
         </div>""", unsafe_allow_html=True)
+
     with c2:
         st.markdown("""<div class="ts-card">
             <p style='color:#06b6d4; font-weight:700; font-size:15px; margin:0;'>Confidence Score</p>
             <p style='color:#64748b; font-size:13px; margin:6px 0 0 0;'>0-100% AI probability rating</p>
         </div>""", unsafe_allow_html=True)
+
     with c3:
         st.markdown("""<div class="ts-card">
             <p style='color:#10b981; font-weight:700; font-size:15px; margin:0;'>Instant Results</p>
@@ -521,6 +548,9 @@ if page == "Detect":
 
     show_chat_widget()
 
+# ---------------------------
+# HISTORY PAGE
+# ---------------------------
 elif page == "History":
     st.markdown("""<h1 style='color:#0f172a !important; -webkit-text-fill-color:#0f172a !important;'>Detection History</h1>""", unsafe_allow_html=True)
     st.markdown("<hr style='border-color:#e2e8f0;'>", unsafe_allow_html=True)
@@ -540,6 +570,9 @@ elif page == "History":
 
     show_chat_widget()
 
+# ---------------------------
+# ABOUT PAGE
+# ---------------------------
 elif page == "About":
     st.markdown("""<h1 style='color:#0f172a !important; -webkit-text-fill-color:#0f172a !important;'>About LuminaCheck AI</h1>""", unsafe_allow_html=True)
     st.markdown("<hr style='border-color:#e2e8f0;'>", unsafe_allow_html=True)
