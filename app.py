@@ -8,25 +8,43 @@ import requests
 import streamlit as st
 from PIL import Image
 
-# ---------------------------
+# =========================
+# PAGE CONFIG
+# =========================
+st.set_page_config(page_title="LuminaCheck AI", page_icon="🔍", layout="wide")
+
+# =========================
 # API KEYS
-# ---------------------------
+# =========================
 HIVE_API_KEY = st.secrets.get("HIVE_API_KEY", os.environ.get("HIVE_API_KEY", "")).strip()
 GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", os.environ.get("GEMINI_API_KEY", "")).strip()
 
-st.set_page_config(page_title="LuminaCheck AI", page_icon="🔍", layout="wide")
-
-# ---------------------------
-# STYLES
-# ---------------------------
+# =========================
+# CUSTOM CSS
+# =========================
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-* { font-family: 'Inter', sans-serif; box-sizing: border-box; }
-.stApp { background: #f8fafc !important; }
-[data-testid="stSidebar"] { background: #ffffff !important; border-right: 1px solid #e2e8f0 !important; }
-[data-testid="stSidebar"] * { color: #1e293b !important; }
-.stButton>button {
+
+* {
+    font-family: 'Inter', sans-serif;
+    box-sizing: border-box;
+}
+
+.stApp {
+    background: #f8fafc !important;
+}
+
+[data-testid="stSidebar"] {
+    background: #ffffff !important;
+    border-right: 1px solid #e2e8f0 !important;
+}
+
+[data-testid="stSidebar"] * {
+    color: #1e293b !important;
+}
+
+.stButton > button {
     background: #0f172a !important;
     color: white !important;
     border-radius: 8px !important;
@@ -37,17 +55,20 @@ st.markdown("""
     transition: all 0.2s ease !important;
     width: 100% !important;
 }
-.stButton>button:hover {
+
+.stButton > button:hover {
     background: #1e293b !important;
     transform: translateY(-1px) !important;
-    box-shadow: 0 4px 12px rgba(15,23,42,0.3) !important;
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.3) !important;
 }
+
 h1 {
     color: #0f172a !important;
     font-size: 2.8rem !important;
     font-weight: 800 !important;
     -webkit-text-fill-color: #0f172a !important;
 }
+
 [data-testid="stFileUploader"] {
     background: #ffffff !important;
     border: 2px dashed #cbd5e1 !important;
@@ -55,10 +76,12 @@ h1 {
     padding: 30px !important;
     transition: all 0.3s ease !important;
 }
+
 [data-testid="stFileUploader"]:hover {
     border-color: #6366f1 !important;
-    box-shadow: 0 0 0 4px rgba(99,102,241,0.1) !important;
+    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1) !important;
 }
+
 .hero-section {
     background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
     border-radius: 20px;
@@ -67,6 +90,7 @@ h1 {
     position: relative;
     overflow: hidden;
 }
+
 .hero-section::before {
     content: '';
     position: absolute;
@@ -74,22 +98,25 @@ h1 {
     right: -10%;
     width: 400px;
     height: 400px;
-    background: radial-gradient(circle, rgba(99,102,241,0.3) 0%, transparent 70%);
+    background: radial-gradient(circle, rgba(99, 102, 241, 0.3) 0%, transparent 70%);
     border-radius: 50%;
 }
+
 .ts-card {
     background: #ffffff;
     border: 1px solid #e2e8f0;
     border-radius: 16px;
     padding: 24px;
     transition: all 0.2s ease;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
+
 .ts-card:hover {
     border-color: #6366f1;
-    box-shadow: 0 4px 20px rgba(99,102,241,0.15);
+    box-shadow: 0 4px 20px rgba(99, 102, 241, 0.15);
     transform: translateY(-2px);
 }
+
 .stat-number {
     font-size: 2.5rem;
     font-weight: 800;
@@ -97,11 +124,13 @@ h1 {
     line-height: 1;
     margin: 0;
 }
+
 .stat-label {
     font-size: 13px;
-    color: rgba(255,255,255,0.6);
+    color: rgba(255, 255, 255, 0.6);
     margin-top: 4px;
 }
+
 .ts-tag {
     display: inline-block;
     background: #f1f5f9;
@@ -113,24 +142,27 @@ h1 {
     font-weight: 500;
     margin: 3px;
 }
+
 .verdict-real {
     background: #f0fdf4;
     border: 2px solid #22c55e;
     border-radius: 16px;
     padding: 30px;
     text-align: center;
-    box-shadow: 0 0 30px rgba(34,197,94,0.15);
+    box-shadow: 0 0 30px rgba(34, 197, 94, 0.15);
     animation: fadeIn 0.5s ease-out;
 }
+
 .verdict-fake {
     background: #fef2f2;
     border: 2px solid #ef4444;
     border-radius: 16px;
     padding: 30px;
     text-align: center;
-    box-shadow: 0 0 30px rgba(239,68,68,0.15);
+    box-shadow: 0 0 30px rgba(239, 68, 68, 0.15);
     animation: fadeIn 0.5s ease-out;
 }
+
 .verdict-badge-real {
     background: #22c55e;
     color: white;
@@ -142,6 +174,7 @@ h1 {
     letter-spacing: 1px;
     margin-bottom: 15px;
 }
+
 .verdict-badge-fake {
     background: #ef4444;
     color: white;
@@ -153,12 +186,14 @@ h1 {
     letter-spacing: 1px;
     margin-bottom: 15px;
 }
+
 .scan-container {
     border-radius: 16px;
     overflow: hidden;
     border: 2px solid #e2e8f0;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
 }
+
 .chat-msg-user {
     background: #0f172a;
     color: white;
@@ -168,6 +203,7 @@ h1 {
     margin-left: 20%;
     font-size: 14px;
 }
+
 .chat-msg-ai {
     background: #ffffff;
     border: 1px solid #e2e8f0;
@@ -179,14 +215,20 @@ h1 {
     font-size: 14px;
     line-height: 1.7;
 }
+
 .chat-widget {
     background: #ffffff;
     border: 1px solid #e2e8f0;
     border-radius: 20px;
     overflow: hidden;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
 }
-.chat-header { background: #0f172a; padding: 16px 20px; }
+
+.chat-header {
+    background: #0f172a;
+    padding: 16px 20px;
+}
+
 @keyframes fadeIn {
     from { opacity: 0; transform: translateY(10px); }
     to { opacity: 1; transform: translateY(0); }
@@ -194,11 +236,16 @@ h1 {
 </style>
 """, unsafe_allow_html=True)
 
+# =========================
+# LOGO
+# =========================
 LOGO_SVG = """<svg width="36" height="36" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-  <defs><radialGradient id="g1" cx="50%" cy="50%" r="50%">
-    <stop offset="0%" style="stop-color:#6366f1"/>
-    <stop offset="100%" style="stop-color:#06b6d4"/>
-  </radialGradient></defs>
+  <defs>
+    <radialGradient id="g1" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#6366f1"/>
+      <stop offset="100%" style="stop-color:#06b6d4"/>
+    </radialGradient>
+  </defs>
   <circle cx="90" cy="90" r="72" fill="#0f172a"/>
   <circle cx="90" cy="90" r="72" fill="none" stroke="url(#g1)" stroke-width="5"/>
   <ellipse cx="90" cy="90" rx="32" ry="32" fill="url(#g1)"/>
@@ -208,9 +255,18 @@ LOGO_SVG = """<svg width="36" height="36" viewBox="0 0 200 200" xmlns="http://ww
   <line x1="132" y1="132" x2="155" y2="155" stroke="#6366f1" stroke-width="10" stroke-linecap="round"/>
 </svg>"""
 
-# ---------------------------
-# HELPERS
-# ---------------------------
+# =========================
+# SESSION STATE
+# =========================
+if "history" not in st.session_state:
+    st.session_state.history = []
+
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+
+# =========================
+# HELPER FUNCTIONS
+# =========================
 def prepare_image_for_api(image: Image.Image) -> bytes:
     if image.mode in ("RGBA", "LA", "P"):
         image = image.convert("RGB")
@@ -223,7 +279,42 @@ def prepare_image_for_api(image: Image.Image) -> bytes:
     return img_bytes.getvalue()
 
 
-def detect_with_hive(image_bytes):
+def extract_scores_from_hive(data: dict):
+    try:
+        classes = (
+            data.get("status", [{}])[0]
+            .get("response", {})
+            .get("output", [{}])[0]
+            .get("classes", [])
+        )
+    except Exception:
+        return None, None
+
+    ai_score = None
+    real_score = None
+
+    for item in classes:
+        cls = str(item.get("class", "")).lower().replace(" ", "_")
+        score = float(item.get("score", 0))
+
+        if any(word in cls for word in ["ai", "generated", "fake", "synthetic"]):
+            ai_score = max(ai_score or 0, score)
+        elif any(word in cls for word in ["real", "not_ai", "human", "authentic"]):
+            real_score = max(real_score or 0, score)
+
+    if ai_score is None and real_score is None:
+        return None, None
+
+    if ai_score is None and real_score is not None:
+        ai_score = max(0.0, 1 - real_score)
+
+    if real_score is None and ai_score is not None:
+        real_score = max(0.0, 1 - ai_score)
+
+    return ai_score, real_score
+
+
+def detect_with_hive(image_bytes: bytes):
     if not HIVE_API_KEY:
         return None, None, "Hive API key is missing. Add HIVE_API_KEY in Streamlit secrets."
 
@@ -232,42 +323,21 @@ def detect_with_hive(image_bytes):
             "https://api.thehive.ai/api/v2/task/sync",
             headers={"Authorization": f"Token {HIVE_API_KEY}"},
             files={"image": ("image.jpg", image_bytes, "image/jpeg")},
-            timeout=20
+            timeout=30
         )
 
         if response.status_code == 403:
             return None, None, "Hive authentication failed: Invalid API token. Check HIVE_API_KEY in your Streamlit secrets."
+        if response.status_code == 401:
+            return None, None, "Hive authentication failed: Unauthorized request."
         if response.status_code != 200:
             return None, None, f"API Error {response.status_code}: {response.text[:300]}"
 
         data = response.json()
-
-        classes = (
-            data.get("status", [{}])[0]
-            .get("response", {})
-            .get("output", [{}])[0]
-            .get("classes", [])
-        )
-
-        ai_score = None
-        real_score = None
-
-        for c in classes:
-            cls = str(c.get("class", "")).lower().replace(" ", "_")
-            score = float(c.get("score", 0))
-
-            if any(word in cls for word in ["ai", "generated", "fake", "synthetic"]):
-                ai_score = max(ai_score or 0, score)
-            elif any(word in cls for word in ["real", "not_ai", "human", "authentic"]):
-                real_score = max(real_score or 0, score)
+        ai_score, real_score = extract_scores_from_hive(data)
 
         if ai_score is None and real_score is None:
             return None, None, "Could not parse Hive response."
-
-        if ai_score is None and real_score is not None:
-            ai_score = max(0.0, 1 - real_score)
-        if real_score is None and ai_score is not None:
-            real_score = max(0.0, 1 - ai_score)
 
         return ai_score, real_score, None
 
@@ -279,39 +349,32 @@ def detect_with_hive(image_bytes):
         return None, None, f"Unexpected error: {str(e)}"
 
 
-# ---------------------------
-# SIDEBAR
-# ---------------------------
-st.sidebar.markdown(f"""
-<div style='display:flex; align-items:center; gap:10px; padding:10px 0; margin-bottom:10px;'>
-    {LOGO_SVG}
-    <div>
-        <p style='color:#0f172a; font-weight:700; font-size:16px; margin:0;'>LuminaCheck AI</p>
-        <p style='color:#64748b; font-size:11px; margin:0;'>Image Authentication</p>
-    </div>
-</div>
-""", unsafe_allow_html=True)
+def ask_gemini(question: str) -> str:
+    if not GEMINI_API_KEY:
+        return "Gemini API key is missing. Add GEMINI_API_KEY in Streamlit secrets."
 
-st.sidebar.markdown("<hr style='border-color:#e2e8f0; margin:10px 0;'>", unsafe_allow_html=True)
-page = st.sidebar.radio("", ["Detect", "History", "About"], label_visibility="collapsed")
-st.sidebar.markdown("<hr style='border-color:#e2e8f0; margin:10px 0;'>", unsafe_allow_html=True)
-st.sidebar.markdown(
-    "<p style='color:#64748b; font-size:12px;'>Upload any image to detect if it is REAL or FAKE using Hive AI forensics.</p>",
-    unsafe_allow_html=True
-)
-st.sidebar.markdown("<p style='color:#94a3b8; font-size:11px; margin-top:20px;'>Powered by Hive AI</p>", unsafe_allow_html=True)
+    try:
+        import google.generativeai as genai
 
-# ---------------------------
-# SESSION STATE
-# ---------------------------
-if "history" not in st.session_state:
-    st.session_state.history = []
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []
+        genai.configure(api_key=GEMINI_API_KEY)
+        model = genai.GenerativeModel("gemini-2.5-flash")
 
-# ---------------------------
-# CHAT WIDGET
-# ---------------------------
+        response = model.generate_content(
+            f"""You are LuminaCheck AI Assistant, an expert in image forensics and deepfake detection.
+Answer in 2-3 short sentences only.
+
+Question: {question}"""
+        )
+
+        if hasattr(response, "text") and response.text:
+            return response.text.strip()
+
+        return "Sorry, I couldn't generate a response."
+
+    except Exception:
+        return "The chat assistant is temporarily unavailable."
+
+
 def show_chat_widget():
     st.markdown("<br>", unsafe_allow_html=True)
     st.markdown("""
@@ -341,53 +404,55 @@ def show_chat_widget():
     col1, col2, col3 = st.columns([5, 1, 1])
 
     with col1:
-        user_input = st.text_input("", placeholder="Ask anything...", key="chat_bottom", label_visibility="collapsed")
+        user_input = st.text_input(
+            "",
+            placeholder="Ask anything...",
+            key="chat_bottom",
+            label_visibility="collapsed"
+        )
+
     with col2:
         send = st.button("Send", key="send_bottom")
+
     with col3:
         if st.button("Clear", key="clear_bottom"):
             st.session_state.chat_history = []
             st.rerun()
 
-    if send and user_input:
-        st.session_state.chat_history.append({"role": "user", "content": user_input})
+    if send and user_input.strip():
+        st.session_state.chat_history.append({"role": "user", "content": user_input.strip()})
+        answer = ask_gemini(user_input.strip())
+        st.session_state.chat_history.append({"role": "assistant", "content": answer})
+        st.rerun()
 
-        if not GEMINI_API_KEY:
-            st.session_state.chat_history.append({
-                "role": "assistant",
-                "content": "Gemini API key is missing. Add GEMINI_API_KEY in Streamlit secrets."
-            })
-            st.rerun()
+# =========================
+# SIDEBAR
+# =========================
+st.sidebar.markdown(f"""
+<div style='display:flex; align-items:center; gap:10px; padding:10px 0; margin-bottom:10px;'>
+    {LOGO_SVG}
+    <div>
+        <p style='color:#0f172a; font-weight:700; font-size:16px; margin:0;'>LuminaCheck AI</p>
+        <p style='color:#64748b; font-size:11px; margin:0;'>Image Authentication</p>
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
-        try:
-            import google.generativeai as genai
+st.sidebar.markdown("<hr style='border-color:#e2e8f0; margin:10px 0;'>", unsafe_allow_html=True)
+page = st.sidebar.radio("", ["Detect", "History", "About"], label_visibility="collapsed")
+st.sidebar.markdown("<hr style='border-color:#e2e8f0; margin:10px 0;'>", unsafe_allow_html=True)
+st.sidebar.markdown(
+    "<p style='color:#64748b; font-size:12px;'>Upload any image to detect if it is REAL or FAKE using Hive AI forensics.</p>",
+    unsafe_allow_html=True
+)
+st.sidebar.markdown(
+    "<p style='color:#94a3b8; font-size:11px; margin-top:20px;'>Powered by Hive AI</p>",
+    unsafe_allow_html=True
+)
 
-            genai.configure(api_key=GEMINI_API_KEY)
-
-            with st.spinner("Thinking..."):
-                model = genai.GenerativeModel("gemini-2.5-flash")
-                response = model.generate_content(
-                    f"""You are LuminaCheck AI Assistant, an expert in image forensics and deepfake detection.
-Answer in 2-3 short sentences only.
-
-Question: {user_input}"""
-                )
-
-            answer = response.text.strip() if hasattr(response, "text") and response.text else "Sorry, I couldn't generate a response."
-            st.session_state.chat_history.append({"role": "assistant", "content": answer})
-            st.rerun()
-
-        except Exception:
-            st.session_state.chat_history.append({
-                "role": "assistant",
-                "content": "The chat assistant is temporarily unavailable."
-            })
-            st.rerun()
-
-
-# ---------------------------
+# =========================
 # DETECT PAGE
-# ---------------------------
+# =========================
 if page == "Detect":
     st.markdown("""
     <div class="hero-section">
@@ -411,24 +476,31 @@ if page == "Detect":
     c1, c2, c3 = st.columns(3)
 
     with c1:
-        st.markdown("""<div class="ts-card">
+        st.markdown("""
+        <div class="ts-card">
             <p style='color:#6366f1; font-weight:700; font-size:15px; margin:0;'>Hive AI Engine</p>
             <p style='color:#64748b; font-size:13px; margin:6px 0 0 0;'>Specialized AI image detection model</p>
-        </div>""", unsafe_allow_html=True)
+        </div>
+        """, unsafe_allow_html=True)
 
     with c2:
-        st.markdown("""<div class="ts-card">
+        st.markdown("""
+        <div class="ts-card">
             <p style='color:#06b6d4; font-weight:700; font-size:15px; margin:0;'>Confidence Score</p>
             <p style='color:#64748b; font-size:13px; margin:6px 0 0 0;'>0-100% AI probability rating</p>
-        </div>""", unsafe_allow_html=True)
+        </div>
+        """, unsafe_allow_html=True)
 
     with c3:
-        st.markdown("""<div class="ts-card">
+        st.markdown("""
+        <div class="ts-card">
             <p style='color:#10b981; font-weight:700; font-size:15px; margin:0;'>Instant Results</p>
             <p style='color:#64748b; font-size:13px; margin:6px 0 0 0;'>Fast detection with progress bar</p>
-        </div>""", unsafe_allow_html=True)
+        </div>
+        """, unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
+
     st.markdown("""
     <div class="ts-card" style='margin-bottom:20px;'>
         <p style='color:#0f172a; font-weight:700; font-size:16px; margin:0 0 5px 0;'>Upload Image</p>
@@ -436,7 +508,11 @@ if page == "Detect":
     </div>
     """, unsafe_allow_html=True)
 
-    uploaded_file = st.file_uploader("", type=["jpg", "jpeg", "png"], label_visibility="collapsed")
+    uploaded_file = st.file_uploader(
+        "",
+        type=["jpg", "jpeg", "png"],
+        label_visibility="collapsed"
+    )
 
     if uploaded_file is not None:
         st.markdown("<br>", unsafe_allow_html=True)
@@ -447,7 +523,7 @@ if page == "Detect":
             image = Image.open(uploaded_file)
             st.markdown('<div class="scan-container">', unsafe_allow_html=True)
             st.image(image, use_container_width=True)
-            st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
 
         with col2:
             st.markdown(f"""
@@ -473,14 +549,20 @@ if page == "Detect":
                 progress_bar = st.progress(0)
                 status_text = st.empty()
 
-                status_text.markdown("<p style='color:#6366f1; font-size:14px; font-weight:600;'>Preparing image...</p>", unsafe_allow_html=True)
+                status_text.markdown(
+                    "<p style='color:#6366f1; font-size:14px; font-weight:600;'>Preparing image...</p>",
+                    unsafe_allow_html=True
+                )
                 for i in range(0, 25):
                     time.sleep(0.02)
                     progress_bar.progress(i)
 
                 image_bytes = prepare_image_for_api(image)
 
-                status_text.markdown("<p style='color:#6366f1; font-size:14px; font-weight:600;'>Hive AI scanning...</p>", unsafe_allow_html=True)
+                status_text.markdown(
+                    "<p style='color:#6366f1; font-size:14px; font-weight:600;'>Hive AI scanning...</p>",
+                    unsafe_allow_html=True
+                )
                 for i in range(25, 50):
                     time.sleep(0.02)
                     progress_bar.progress(i)
@@ -491,9 +573,12 @@ if page == "Detect":
                     time.sleep(0.01)
                     progress_bar.progress(i)
 
-                status_text.markdown("<p style='color:#22c55e; font-size:14px; font-weight:600;'>Analysis complete!</p>", unsafe_allow_html=True)
                 progress_bar.progress(100)
-                time.sleep(0.4)
+                status_text.markdown(
+                    "<p style='color:#22c55e; font-size:14px; font-weight:600;'>Analysis complete!</p>",
+                    unsafe_allow_html=True
+                )
+                time.sleep(0.3)
                 progress_bar.empty()
                 status_text.empty()
 
@@ -524,7 +609,9 @@ if page == "Detect":
                         st.markdown(f"""
                         <div class="verdict-fake">
                             <div class="verdict-badge-fake">FAKE / AI-GENERATED</div>
-                            <p style='color:#7f1d1d; font-size:15px; margin-top:10px;'>This image has a <b>{hive_percent}%</b> probability of being AI-generated or fake.</p>
+                            <p style='color:#7f1d1d; font-size:15px; margin-top:10px;'>
+                                This image has a <b>{hive_percent}%</b> probability of being AI-generated or fake.
+                            </p>
                         </div>
                         """, unsafe_allow_html=True)
                     else:
@@ -532,34 +619,44 @@ if page == "Detect":
                         st.markdown(f"""
                         <div class="verdict-real">
                             <div class="verdict-badge-real">REAL IMAGE VERIFIED</div>
-                            <p style='color:#14532d; font-size:15px; margin-top:10px;'>This image has a <b>{real_percent}%</b> probability of being a genuine photograph.</p>
+                            <p style='color:#14532d; font-size:15px; margin-top:10px;'>
+                                This image has a <b>{real_percent}%</b> probability of being a genuine photograph.
+                            </p>
                         </div>
                         """, unsafe_allow_html=True)
-                else:
-                    verdict = "ERROR"
-                    st.error(error_msg or "Detection failed. Please try again.")
 
-                st.session_state.history.append({
-                    "Time": datetime.now().strftime("%H:%M:%S"),
-                    "File": uploaded_file.name,
-                    "Result": verdict,
-                    "Details": f"AI: {round((hive_ai or 0) * 100)}% | Real: {round((hive_real or 0) * 100)}%"
-                })
+                    st.session_state.history.append({
+                        "Time": datetime.now().strftime("%H:%M:%S"),
+                        "File": uploaded_file.name,
+                        "Result": verdict,
+                        "Details": f"AI: {hive_percent}% | Real: {real_percent}%"
+                    })
+                else:
+                    st.error(error_msg or "Detection failed. Please try again.")
 
     show_chat_widget()
 
-# ---------------------------
+# =========================
 # HISTORY PAGE
-# ---------------------------
+# =========================
 elif page == "History":
-    st.markdown("""<h1 style='color:#0f172a !important; -webkit-text-fill-color:#0f172a !important;'>Detection History</h1>""", unsafe_allow_html=True)
+    st.markdown("""
+    <h1 style='color:#0f172a !important; -webkit-text-fill-color:#0f172a !important;'>Detection History</h1>
+    """, unsafe_allow_html=True)
+
     st.markdown("<hr style='border-color:#e2e8f0;'>", unsafe_allow_html=True)
 
     if st.session_state.history:
         df = pd.DataFrame(st.session_state.history)
         st.dataframe(df, use_container_width=True)
-        csv = df.to_csv(index=False)
-        st.download_button("Download Report (CSV)", csv, "lumina_report.csv", "text/csv")
+
+        csv_data = df.to_csv(index=False)
+        st.download_button(
+            "Download Report (CSV)",
+            csv_data,
+            "lumina_report.csv",
+            "text/csv"
+        )
     else:
         st.markdown("""
         <div class="ts-card" style='text-align:center; padding:50px;'>
@@ -570,11 +667,14 @@ elif page == "History":
 
     show_chat_widget()
 
-# ---------------------------
+# =========================
 # ABOUT PAGE
-# ---------------------------
+# =========================
 elif page == "About":
-    st.markdown("""<h1 style='color:#0f172a !important; -webkit-text-fill-color:#0f172a !important;'>About LuminaCheck AI</h1>""", unsafe_allow_html=True)
+    st.markdown("""
+    <h1 style='color:#0f172a !important; -webkit-text-fill-color:#0f172a !important;'>About LuminaCheck AI</h1>
+    """, unsafe_allow_html=True)
+
     st.markdown("<hr style='border-color:#e2e8f0;'>", unsafe_allow_html=True)
 
     c1, c2 = st.columns(2)
@@ -584,7 +684,7 @@ elif page == "About":
         <div class="ts-card">
             <p style='color:#6366f1; font-weight:700; font-size:15px; margin:0 0 10px 0;'>What is LuminaCheck AI?</p>
             <p style='color:#475569; font-size:14px; line-height:1.7; margin:0;'>
-            LuminaCheck AI uses Hive AI's specialized detection engine to determine whether a digital image is real, fake, or AI-generated.
+                LuminaCheck AI uses Hive AI's specialized detection engine to determine whether a digital image is real, fake, or AI-generated.
             </p>
         </div>
         """, unsafe_allow_html=True)
@@ -594,21 +694,24 @@ elif page == "About":
         <div class="ts-card">
             <p style='color:#06b6d4; font-weight:700; font-size:15px; margin:0 0 10px 0;'>Technologies Used</p>
             <p style='color:#475569; font-size:14px; line-height:2; margin:0;'>
-            Python | Streamlit<br>
-            Hive AI (Specialized Detection)<br>
-            Google Gemini AI (Chatbot)<br>
-            Streamlit Cloud
+                Python | Streamlit<br>
+                Hive AI (Specialized Detection)<br>
+                Google Gemini AI (Chatbot)<br>
+                Streamlit Cloud
             </p>
         </div>
         """, unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
+
     st.markdown("""
     <div class="ts-card" style='text-align:center; background:linear-gradient(135deg,#0f172a,#1e293b); border:none;'>
         <p style='color:#94a3b8; font-size:13px; margin:0 0 5px 0;'>Developed By</p>
         <p style='color:#ffffff; font-size:22px; font-weight:700; margin:0;'>Devapriya</p>
         <p style='color:#64748b; font-size:13px; margin:5px 0 15px 0;'>BCA Final Year Student | March 2026</p>
-        <span class="ts-tag" style='background:rgba(255,255,255,0.1); color:#94a3b8; border-color:rgba(255,255,255,0.1);'>luminacheck-ai.streamlit.app</span>
+        <span class="ts-tag" style='background:rgba(255,255,255,0.1); color:#94a3b8; border-color:rgba(255,255,255,0.1);'>
+            luminacheck-ai.streamlit.app
+        </span>
     </div>
     """, unsafe_allow_html=True)
 
