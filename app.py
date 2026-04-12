@@ -1,6 +1,3 @@
-Here is your corrected code without emojis:
-
-```python
 import streamlit as st
 from PIL import Image
 import requests
