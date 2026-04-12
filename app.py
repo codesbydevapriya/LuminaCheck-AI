@@ -7,35 +7,32 @@ import pandas as pd
 from datetime import datetime
 import time
 
-# ---------------- CONFIG ----------------
 HIVE_API_KEY = os.environ.get("HIVE_API_KEY")
 
 st.set_page_config(page_title="LuminaCheck AI", layout="wide")
 
-# Clear cache to prevent old image bug
-st.cache_data.clear()
-
 # ---------------- STYLE ----------------
 st.markdown("""
 <style>
-.stApp { background: #f8fafc; }
+.stApp { background: #f8fafc !important; }
 .stButton>button {
-    background: #0f172a;
-    color: white;
-    border-radius: 8px;
-    padding: 10px 20px;
-    font-weight: 600;
+    background: #0f172a !important;
+    color: white !important;
+    border-radius: 8px !important;
+    padding: 12px 24px !important;
+    font-weight: 600 !important;
+    width: 100% !important;
 }
 </style>
 """, unsafe_allow_html=True)
 
-# ---------------- HIVE API ----------------
+# ---------------- HIVE FUNCTION ----------------
 def detect_with_hive(image_bytes):
     try:
         response = requests.post(
             "https://api.thehive.ai/api/v2/task/sync",
             headers={"Authorization": f"Token {HIVE_API_KEY}"},
-            files={"image": ("image.jpg", image_bytes, "image/jpeg")},
+            files={"image": ("image.jpg", image_bytes)},  # FIXED
             timeout=20
         )
 
@@ -80,41 +77,54 @@ st.title("LuminaCheck AI")
 uploaded_file = st.file_uploader(
     "Upload Image",
     type=["jpg", "jpeg", "png"],
-    key=str(time.time())  # prevents caching bug
+    key=str(time.time())  # FIXED caching bug
 )
 
 if uploaded_file is not None:
 
-    # Load fresh image (FIXED BUG)
+    # FIXED image bug
     image = Image.open(uploaded_file).convert("RGB")
 
-    col1, col2 = st.columns(2)
+    col1, col2 = st.columns([1, 1])
 
     with col1:
         st.image(image, use_container_width=True)
 
     with col2:
-        st.write("File:", uploaded_file.name)
-        st.write("Size:", round(uploaded_file.size / 1024, 2), "KB")
+        st.markdown(f"""
+        **File Name:** {uploaded_file.name}  
+        **File Size:** {round(uploaded_file.size/1024,2)} KB
+        """)
 
         if st.button("Analyze Image"):
 
-            with st.spinner("Analyzing..."):
+            progress = st.progress(0)
 
-                img_bytes = io.BytesIO()
-                image.save(img_bytes, format="JPEG")
+            for i in range(30):
+                time.sleep(0.01)
+                progress.progress(i)
 
-                ai, real = detect_with_hive(img_bytes.getvalue())
+            img_bytes = io.BytesIO()
+            image.save(img_bytes, format="JPEG")
+
+            ai, real = detect_with_hive(img_bytes.getvalue())
+
+            for i in range(30, 100):
+                time.sleep(0.005)
+                progress.progress(i)
+
+            progress.empty()
 
             if ai is not None:
 
                 ai_percent = round(ai * 100)
                 real_percent = round(real * 100)
 
-                st.subheader("Result")
+                st.markdown("### Detection Result")
 
-                st.write("AI Probability:", ai_percent, "%")
-                st.write("Real Probability:", real_percent, "%")
+                colA, colB = st.columns(2)
+                colA.metric("AI Probability", f"{ai_percent}%")
+                colB.metric("Real Probability", f"{real_percent}%")
 
                 if ai > 0.5:
                     verdict = "FAKE / AI GENERATED"
@@ -125,7 +135,7 @@ if uploaded_file is not None:
 
             else:
                 verdict = "ERROR"
-                st.error("Detection failed (Check API key or image format)")
+                st.error("Detection failed. Check API key.")
 
             # Save history
             st.session_state.history.append({
@@ -143,4 +153,4 @@ if st.session_state.history:
     df = pd.DataFrame(st.session_state.history)
     st.dataframe(df, use_container_width=True)
 else:
-    st.write("No history yet")
+    st.write("No detections yet")
