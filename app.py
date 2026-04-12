@@ -1,3 +1,4 @@
+import os
 import streamlit as st
 from PIL import Image
 import requests
@@ -5,27 +6,36 @@ import io
 import pandas as pd
 from datetime import datetime
 import time
-import google.generativeai as genai
 
-# KEYS
-HIVE_API_KEY = st.secrets["HIVE_API_KEY"]
-GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
-
-genai.configure(api_key=GEMINI_API_KEY)
+# ---------------- CONFIG ----------------
+HIVE_API_KEY = os.environ.get("HIVE_API_KEY")
 
 st.set_page_config(page_title="LuminaCheck AI", layout="wide")
 
-# ---------------- HIVE DETECTION ----------------
+# Clear cache to prevent old image bug
+st.cache_data.clear()
+
+# ---------------- STYLE ----------------
+st.markdown("""
+<style>
+.stApp { background: #f8fafc; }
+.stButton>button {
+    background: #0f172a;
+    color: white;
+    border-radius: 8px;
+    padding: 10px 20px;
+    font-weight: 600;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# ---------------- HIVE API ----------------
 def detect_with_hive(image_bytes):
     try:
         response = requests.post(
             "https://api.thehive.ai/api/v2/task/sync",
-            headers={
-                "Authorization": f"Bearer {HIVE_API_KEY}"
-            },
-            files={
-                "media": ("image.jpg", image_bytes, "image/jpeg")  # FIXED
-            },
+            headers={"Authorization": f"Token {HIVE_API_KEY}"},
+            files={"image": ("image.jpg", image_bytes, "image/jpeg")},
             timeout=20
         )
 
@@ -33,92 +43,91 @@ def detect_with_hive(image_bytes):
             data = response.json()
 
             try:
-                output = data["status"][0]["response"]["output"][0]["classes"]
+                classes = data["status"][0]["response"]["output"][0]["classes"]
 
                 ai_score = 0
                 real_score = 0
 
-                for c in output:
-                    label = c["class"].lower()
+                for c in classes:
+                    cls = c["class"].lower()
 
-                    if any(x in label for x in ["ai", "generated", "fake"]):
+                    if "ai" in cls or "fake" in cls or "generated" in cls:
                         ai_score = c["score"]
 
-                    if any(x in label for x in ["real", "human"]):
+                    if "real" in cls or "human" in cls:
                         real_score = c["score"]
 
                 return ai_score, real_score
 
-            except Exception as e:
-                st.error("Parsing error")
-                st.write(data)
+            except:
                 return None, None
 
         else:
-            st.error(f"API Error: {response.status_code}")
-            st.write(response.text)
             return None, None
 
-    except Exception as e:
-        st.error("Connection error")
-        st.write(str(e))
+    except:
         return None, None
+
+
+# ---------------- SESSION ----------------
+if "history" not in st.session_state:
+    st.session_state.history = []
 
 
 # ---------------- UI ----------------
 st.title("LuminaCheck AI")
 
-uploaded_file = st.file_uploader("Upload Image", type=["jpg", "jpeg", "png"])
+uploaded_file = st.file_uploader(
+    "Upload Image",
+    type=["jpg", "jpeg", "png"],
+    key=str(time.time())  # prevents caching bug
+)
 
-if uploaded_file:
+if uploaded_file is not None:
+
+    # Load fresh image (FIXED BUG)
+    image = Image.open(uploaded_file).convert("RGB")
+
     col1, col2 = st.columns(2)
 
     with col1:
-        image = Image.open(uploaded_file)
         st.image(image, use_container_width=True)
 
     with col2:
         st.write("File:", uploaded_file.name)
-        st.write("Size:", f"{uploaded_file.size/1024:.1f} KB")
+        st.write("Size:", round(uploaded_file.size / 1024, 2), "KB")
 
         if st.button("Analyze Image"):
 
-            progress = st.progress(0)
+            with st.spinner("Analyzing..."):
 
-            for i in range(30):
-                time.sleep(0.02)
-                progress.progress(i)
+                img_bytes = io.BytesIO()
+                image.save(img_bytes, format="JPEG")
 
-            img_bytes = io.BytesIO()
-            image.save(img_bytes, format="JPEG")
-
-            ai, real = detect_with_hive(img_bytes.getvalue())
-
-            for i in range(30, 100):
-                time.sleep(0.01)
-                progress.progress(i)
-
-            progress.empty()
+                ai, real = detect_with_hive(img_bytes.getvalue())
 
             if ai is not None:
+
                 ai_percent = round(ai * 100)
                 real_percent = round(real * 100)
+
+                st.subheader("Result")
 
                 st.write("AI Probability:", ai_percent, "%")
                 st.write("Real Probability:", real_percent, "%")
 
                 if ai > 0.5:
-                    verdict = "FAKE"
-                    st.error(f"FAKE IMAGE ({ai_percent}%)")
+                    verdict = "FAKE / AI GENERATED"
+                    st.error(verdict)
                 else:
-                    verdict = "REAL"
-                    st.success(f"REAL IMAGE ({real_percent}%)")
+                    verdict = "REAL IMAGE"
+                    st.success(verdict)
+
             else:
                 verdict = "ERROR"
+                st.error("Detection failed (Check API key or image format)")
 
-            if "history" not in st.session_state:
-                st.session_state.history = []
-
+            # Save history
             st.session_state.history.append({
                 "Time": datetime.now().strftime("%H:%M:%S"),
                 "File": uploaded_file.name,
@@ -127,21 +136,11 @@ if uploaded_file:
 
 
 # ---------------- HISTORY ----------------
-if st.checkbox("Show History"):
-    if "history" in st.session_state:
-        df = pd.DataFrame(st.session_state.history)
-        st.dataframe(df)
+st.markdown("---")
+st.subheader("Detection History")
 
-
-# ---------------- CHAT ----------------
-st.subheader("Ask AI")
-
-question = st.text_input("Ask something")
-
-if st.button("Ask"):
-    if question:
-        model = genai.GenerativeModel("gemini-2.5-flash")
-        res = model.generate_content(
-            f"Answer shortly: {question}"
-        )
-        st.write(res.text)
+if st.session_state.history:
+    df = pd.DataFrame(st.session_state.history)
+    st.dataframe(df, use_container_width=True)
+else:
+    st.write("No history yet")
