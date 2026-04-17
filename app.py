@@ -6,6 +6,7 @@ import io
 import pandas as pd
 from datetime import datetime
 import time
+import base64
 
 # 🔐 Load from Streamlit Secrets
 HIVE_ACCESS_KEY = os.environ.get("HIVE_ACCESS_KEY")
@@ -22,12 +23,17 @@ def detect_with_hive(image_bytes):
     url = "https://api.thehive.ai/api/v3/tasks/sync"
 
     try:
+        # ✅ Correct V3 authentication (Basic Auth)
+        auth_string = f"{HIVE_ACCESS_KEY}:{HIVE_SECRET_KEY}"
+        encoded_auth = base64.b64encode(auth_string.encode()).decode()
+
+        headers = {
+            "Authorization": f"Basic {encoded_auth}"
+        }
+
         response = requests.post(
             url,
-            headers={
-                "x-api-key": HIVE_ACCESS_KEY,
-                "x-api-secret": HIVE_SECRET_KEY
-            },
+            headers=headers,
             files={"media": ("image.jpg", image_bytes, "image/jpeg")},
             timeout=20
         )
@@ -39,7 +45,6 @@ def detect_with_hive(image_bytes):
 
         data = response.json()
 
-        # Safe parsing
         output = data.get("output", [])
         if not output:
             st.error("❌ No output from Hive")
