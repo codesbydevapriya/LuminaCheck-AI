@@ -46,12 +46,19 @@ def detect_with_gemini(image):
     except Exception as e:
         error_msg = str(e)
 
-        # 🚨 Handle quota error
+        # 🚨 Smart fallback instead of random
         if "429" in error_msg or "quota" in error_msg.lower():
-            st.warning("⚠️ Gemini limit reached. Using fallback detection.")
+            st.warning("⚠️ Gemini limit reached. Using smart fallback detection.")
 
-            # Simple fallback logic
-            return 0.5, 0.5
+            width, height = image.size
+            total_pixels = width * height
+
+            if total_pixels > 2000000:
+                return 0.3, 0.7   # likely real
+            elif total_pixels < 500000:
+                return 0.6, 0.4   # likely AI
+            else:
+                return 0.5, 0.5   # uncertain
 
         st.error(f"❌ Gemini Error: {error_msg}")
         return None, None
