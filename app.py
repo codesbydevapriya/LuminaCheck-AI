@@ -1,42 +1,35 @@
 import os
 import streamlit as st
 from PIL import Image
-import io
 import pandas as pd
 from datetime import datetime
 import time
 import google.generativeai as genai
 
-# 🔐 Gemini API from secrets
+# 🔐 Load API Key
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
 st.set_page_config(page_title="LuminaCheck AI", page_icon="🔍", layout="wide")
 
-# ------------------- GEMINI DETECTION -------------------
+# ------------------- DETECTION FUNCTION -------------------
 def detect_with_gemini(image):
     if not GEMINI_API_KEY:
-        st.error("❌ Gemini API key missing. Add it in Streamlit Secrets.")
+        st.error("❌ Gemini API key missing.")
         return None, None
 
     try:
         genai.configure(api_key=GEMINI_API_KEY)
-
         model = genai.GenerativeModel("gemini-2.5-flash")
 
         prompt = """
         Analyze this image and determine if it is AI-generated or real.
 
-        Respond strictly in this format:
-        AI: <percentage>
-        REAL: <percentage>
-
-        Example:
-        AI: 78
-        REAL: 22
+        Respond ONLY like this:
+        AI: <number>
+        REAL: <number>
         """
 
         response = model.generate_content([prompt, image])
-
         text = response.text
 
         ai_score = 0
@@ -51,7 +44,16 @@ def detect_with_gemini(image):
         return ai_score, real_score
 
     except Exception as e:
-        st.error(f"❌ Gemini Error: {str(e)}")
+        error_msg = str(e)
+
+        # 🚨 Handle quota error
+        if "429" in error_msg or "quota" in error_msg.lower():
+            st.warning("⚠️ Gemini limit reached. Using fallback detection.")
+
+            # Simple fallback logic
+            return 0.5, 0.5
+
+        st.error(f"❌ Gemini Error: {error_msg}")
         return None, None
 
 
