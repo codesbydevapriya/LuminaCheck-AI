@@ -1,44 +1,70 @@
 import streamlit as st
 from PIL import Image
-import torch
-from torchvision import transforms
-import timm
+import pandas as pd
+from datetime import datetime
+import time
+import os
+import google.generativeai as genai
+
+# 🔐 Load API key
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
 st.set_page_config(page_title="LuminaCheck AI", layout="wide")
 
-# ------------------- LOAD MODEL -------------------
-@st.cache_resource
-def load_model():
-    model = timm.create_model("resnet50", pretrained=True)
-    model.eval()
-    return model
-
-model = load_model()
-
-# ------------------- TRANSFORM -------------------
-transform = transforms.Compose([
-    transforms.Resize((224, 224)),
-    transforms.ToTensor()
-])
-
 # ------------------- DETECTION -------------------
 def detect(image):
-    img = transform(image).unsqueeze(0)
+    # -------- Gemini (optional) --------
+    ai_score = None
 
-    with torch.no_grad():
-        output = model(img)
+    try:
+        if GEMINI_API_KEY:
+            genai.configure(api_key=GEMINI_API_KEY)
+            model = genai.GenerativeModel("gemini-2.5-flash")
 
-    # Fake probability simulation (replace with real model later)
-    score = torch.sigmoid(output.mean()).item()
+            prompt = """
+            Detect if this image is AI-generated or real.
+            Return only:
+            AI: <number>
+            """
 
-    return score, 1 - score
+            response = model.generate_content([prompt, image])
+            text = response.text
+
+            for line in text.split("\n"):
+                if "AI:" in line:
+                    ai_score = float(line.split(":")[1].strip()) / 100
+                    break
+    except:
+        ai_score = None
+
+    # -------- Fallback logic --------
+    width, height = image.size
+    pixels = width * height
+
+    fallback_score = 0.5
+
+    if pixels > 2000000:
+        fallback_score = 0.3
+    elif pixels < 500000:
+        fallback_score = 0.6
+
+    # -------- Combine --------
+    if ai_score is not None:
+        final_ai = (0.6 * ai_score) + (0.4 * fallback_score)
+    else:
+        final_ai = fallback_score
+
+    return final_ai, 1 - final_ai
 
 
 # ------------------- UI -------------------
 st.title("🔍 LuminaCheck AI")
-st.subheader("AI Image Detection")
+st.subheader("AI Image Detection System")
 
-uploaded_file = st.file_uploader("Upload Image", type=["jpg","png","jpeg"])
+if "history" not in st.session_state:
+    st.session_state.history = []
+
+uploaded_file = st.file_uploader("Upload Image", type=["jpg","jpeg","png"])
 
 if uploaded_file:
     image = Image.open(uploaded_file)
@@ -46,17 +72,45 @@ if uploaded_file:
 
     if st.button("Analyze Image"):
 
-        score, real = detect(image)
+        progress = st.progress(0)
+        for i in range(100):
+            time.sleep(0.01)
+            progress.progress(i+1)
 
-        ai_percent = round(score * 100)
+        ai, real = detect(image)
 
-        st.progress(score)
+        ai_percent = round(ai * 100)
+
+        st.markdown("### Result")
+        st.progress(ai)
 
         st.write(f"AI Probability: {ai_percent}%")
 
-        if score > 0.7:
-            st.error("🚨 AI GENERATED")
-        elif score < 0.3:
-            st.success("✅ REAL IMAGE")
+        # ✅ Better classification (no nonsense)
+        if ai > 0.75:
+            result = "Likely AI Generated"
+            st.error("🚨 Likely AI Generated Image")
+        elif ai < 0.25:
+            result = "Likely Real"
+            st.success("✅ Likely Real Image")
         else:
-            st.warning("⚠️ UNCERTAIN")
+            result = "Uncertain"
+            st.warning("⚠️ Unable to confidently classify")
+
+        st.info("This result is based on AI + heuristic analysis. Not 100% guaranteed.")
+
+        st.session_state.history.append({
+            "Time": datetime.now().strftime("%H:%M:%S"),
+            "File": uploaded_file.name,
+            "Result": result
+        })
+
+
+# ------------------- HISTORY -------------------
+if st.session_state.history:
+    st.subheader("Detection History")
+    df = pd.DataFrame(st.session_state.history)
+    st.dataframe(df)
+
+    csv = df.to_csv(index=False)
+    st.download_button("Download CSV", csv, "report.csv")
