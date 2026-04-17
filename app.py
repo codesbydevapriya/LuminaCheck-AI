@@ -1,73 +1,57 @@
 import os
 import streamlit as st
 from PIL import Image
-import requests
 import io
 import pandas as pd
 from datetime import datetime
 import time
-import base64
+import google.generativeai as genai
 
-# 🔐 Load from Streamlit Secrets
-HIVE_ACCESS_KEY = os.environ.get("HIVE_ACCESS_KEY")
-HIVE_SECRET_KEY = os.environ.get("HIVE_SECRET_KEY")
+# 🔐 Gemini API from secrets
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
 st.set_page_config(page_title="LuminaCheck AI", page_icon="🔍", layout="wide")
 
-# ------------------- HIVE V3 FUNCTION -------------------
-def detect_with_hive(image_bytes):
-    if not HIVE_ACCESS_KEY or not HIVE_SECRET_KEY:
-        st.error("❌ Hive API keys missing. Check Streamlit Secrets.")
+# ------------------- GEMINI DETECTION -------------------
+def detect_with_gemini(image):
+    if not GEMINI_API_KEY:
+        st.error("❌ Gemini API key missing. Add it in Streamlit Secrets.")
         return None, None
 
-    url = "https://api.thehive.ai/api/v3/tasks/sync"
-
     try:
-        # ✅ Correct V3 authentication (Basic Auth)
-        auth_string = f"{HIVE_ACCESS_KEY}:{HIVE_SECRET_KEY}"
-        encoded_auth = base64.b64encode(auth_string.encode()).decode()
+        genai.configure(api_key=GEMINI_API_KEY)
 
-        headers = {
-            "Authorization": f"Basic {encoded_auth}"
-        }
+        model = genai.GenerativeModel("gemini-2.5-flash")
 
-        response = requests.post(
-            url,
-            headers=headers,
-            files={"media": ("image.jpg", image_bytes, "image/jpeg")},
-            timeout=20
-        )
+        prompt = """
+        Analyze this image and determine if it is AI-generated or real.
 
-        if response.status_code != 200:
-            st.error(f"❌ Hive API Error {response.status_code}")
-            st.write(response.text)
-            return None, None
+        Respond strictly in this format:
+        AI: <percentage>
+        REAL: <percentage>
 
-        data = response.json()
+        Example:
+        AI: 78
+        REAL: 22
+        """
 
-        output = data.get("output", [])
-        if not output:
-            st.error("❌ No output from Hive")
-            return None, None
+        response = model.generate_content([prompt, image])
 
-        classes = output[0].get("classes", [])
+        text = response.text
 
         ai_score = 0
         real_score = 0
 
-        for c in classes:
-            name = c.get("class", "").lower()
-            score = c.get("score", 0)
-
-            if "ai" in name or "fake" in name or "generated" in name:
-                ai_score = score
-            elif "real" in name or "human" in name:
-                real_score = score
+        for line in text.split("\n"):
+            if "AI:" in line:
+                ai_score = float(line.split(":")[1].strip()) / 100
+            if "REAL:" in line:
+                real_score = float(line.split(":")[1].strip()) / 100
 
         return ai_score, real_score
 
     except Exception as e:
-        st.error(f"❌ Connection Error: {str(e)}")
+        st.error(f"❌ Gemini Error: {str(e)}")
         return None, None
 
 
@@ -92,10 +76,7 @@ if uploaded_file:
             time.sleep(0.01)
             progress.progress(i)
 
-        img_bytes = io.BytesIO()
-        image.save(img_bytes, format="JPEG")
-
-        ai, real = detect_with_hive(img_bytes.getvalue())
+        ai, real = detect_with_gemini(image)
 
         progress.progress(100)
 
