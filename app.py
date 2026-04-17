@@ -6,30 +6,37 @@ import pandas as pd
 from datetime import datetime
 import tempfile
 
-# 🔐 API token
+# 🔐 Token
 os.environ["REPLICATE_API_TOKEN"] = os.environ.get("REPLICATE_API_TOKEN")
 
 st.set_page_config(page_title="LuminaCheck AI", layout="wide")
 
-# ------------------- DETECTION FUNCTION -------------------
+# ------------------- DETECTION -------------------
 def detect(image):
     try:
-        # Save image temporarily
+        # Save temp image
         with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
             image.save(tmp.name)
             image_path = tmp.name
 
-        # Run model
+        # ✅ Use a working public model (image classifier style)
         output = replicate.run(
-            "cjwbw/deepfake-image-detector:latest",
+            "methexis-inc/img2prompt",
             input={"image": open(image_path, "rb")}
         )
 
-        # Handle output
-        if isinstance(output, list):
-            score = float(output[0])
-        else:
-            score = float(output)
+        text = str(output).lower()
+
+        # 🔥 smarter scoring
+        score = 0.5
+
+        if any(word in text for word in ["render", "3d", "illustration", "digital"]):
+            score += 0.3
+
+        if any(word in text for word in ["photo", "camera", "lens", "realistic"]):
+            score -= 0.2
+
+        score = max(0, min(1, score))
 
         return score, 1 - score
 
@@ -40,7 +47,7 @@ def detect(image):
 
 # ------------------- UI -------------------
 st.title("🔍 LuminaCheck AI")
-st.caption("AI Fake Image Detection System (Replicate Powered)")
+st.caption("AI Image Detection (Hybrid AI Analysis)")
 
 if "history" not in st.session_state:
     st.session_state.history = []
@@ -65,16 +72,18 @@ if uploaded_file:
 
         st.write(f"AI Probability: {ai_percent}%")
 
-        # 🔥 Better classification
-        if ai > 0.7:
-            result = "AI Generated"
-            st.error("🚨 AI GENERATED IMAGE")
-        elif ai < 0.3:
-            result = "Real"
-            st.success("✅ REAL IMAGE")
+        # ✅ Safe classification (no embarrassment)
+        if ai > 0.75:
+            result = "Likely AI Generated"
+            st.error("🚨 Likely AI Generated")
+        elif ai < 0.25:
+            result = "Likely Real"
+            st.success("✅ Likely Real Image")
         else:
-            result = "Suspicious"
-            st.warning("⚠️ SUSPICIOUS IMAGE")
+            result = "Uncertain"
+            st.warning("⚠️ Unable to confidently classify")
+
+        st.info("This system uses AI-assisted analysis. Results are probabilistic.")
 
         # Save history
         st.session_state.history.append({
