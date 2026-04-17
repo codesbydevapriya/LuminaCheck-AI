@@ -5,68 +5,83 @@ import pandas as pd
 from datetime import datetime
 import time
 import google.generativeai as genai
+import numpy as np
 
-# 🔐 Load API Key
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
 st.set_page_config(page_title="LuminaCheck AI", page_icon="🔍", layout="wide")
 
-# ------------------- DETECTION FUNCTION -------------------
+# ------------------- FORENSIC ANALYSIS -------------------
+def analyze_image(image):
+    gray = image.convert("L")
+    arr = np.array(gray)
+
+    # variance (noise level)
+    variance = np.var(arr)
+
+    # edge detection (simple gradient)
+    edges = np.mean(np.abs(np.diff(arr)))
+
+    # sharpness
+    sharpness = variance
+
+    score = 0.5
+
+    if variance < 400:
+        score += 0.2   # smooth → AI
+    else:
+        score -= 0.1
+
+    if edges < 20:
+        score += 0.1
+    else:
+        score -= 0.05
+
+    return max(0, min(1, score))
+
+
+# ------------------- GEMINI -------------------
 def detect_with_gemini(image):
     if not GEMINI_API_KEY:
-        st.error("❌ Gemini API key missing.")
-        return None, None
+        return None
 
     try:
         genai.configure(api_key=GEMINI_API_KEY)
         model = genai.GenerativeModel("gemini-2.5-flash")
 
         prompt = """
-        Analyze this image and determine if it is AI-generated or real.
-
-        Respond ONLY like this:
+        Detect if this image is AI-generated or real.
+        Respond only:
         AI: <number>
-        REAL: <number>
         """
 
         response = model.generate_content([prompt, image])
         text = response.text
 
-        ai_score = 0
-        real_score = 0
-
         for line in text.split("\n"):
             if "AI:" in line:
-                ai_score = float(line.split(":")[1].strip()) / 100
-            if "REAL:" in line:
-                real_score = float(line.split(":")[1].strip()) / 100
+                return float(line.split(":")[1].strip()) / 100
 
-        return ai_score, real_score
+    except:
+        return None
 
-    except Exception as e:
-        error_msg = str(e)
 
-        # 🚨 Smart fallback instead of random
-        if "429" in error_msg or "quota" in error_msg.lower():
-            st.warning("⚠️ Gemini limit reached. Using smart fallback detection.")
+# ------------------- FINAL DECISION -------------------
+def detect(image):
+    forensic_score = analyze_image(image)
+    gemini_score = detect_with_gemini(image)
 
-            width, height = image.size
-            total_pixels = width * height
+    if gemini_score is not None:
+        final_ai = (0.6 * gemini_score) + (0.4 * forensic_score)
+    else:
+        final_ai = forensic_score
 
-            if total_pixels > 2000000:
-                return 0.3, 0.7   # likely real
-            elif total_pixels < 500000:
-                return 0.6, 0.4   # likely AI
-            else:
-                return 0.5, 0.5   # uncertain
-
-        st.error(f"❌ Gemini Error: {error_msg}")
-        return None, None
+    return final_ai, 1 - final_ai
 
 
 # ------------------- UI -------------------
 st.title("🔍 LuminaCheck AI")
-st.write("Detect whether an image is REAL or AI-GENERATED")
+st.write("Advanced AI + Forensic Fake Image Detection")
 
 if "history" not in st.session_state:
     st.session_state.history = []
@@ -80,33 +95,29 @@ if uploaded_file:
     if st.button("Analyze Image"):
 
         progress = st.progress(0)
-
-        for i in range(30):
+        for i in range(100):
             time.sleep(0.01)
-            progress.progress(i)
+            progress.progress(i + 1)
 
-        ai, real = detect_with_gemini(image)
+        ai, real = detect(image)
 
-        progress.progress(100)
+        ai_percent = round(ai * 100)
+        real_percent = round(real * 100)
 
-        if ai is not None:
-            ai_percent = round(ai * 100)
-            real_percent = round(real * 100)
+        st.subheader("Result")
 
-            st.subheader("Result")
+        st.write(f"AI Probability: {ai_percent}%")
+        st.write(f"Real Probability: {real_percent}%")
 
-            st.write(f"AI Probability: {ai_percent}%")
-            st.write(f"Real Probability: {real_percent}%")
-
-            if ai > 0.5:
-                verdict = "FAKE"
-                st.error("🚨 FAKE / AI GENERATED")
-            else:
-                verdict = "REAL"
-                st.success("✅ REAL IMAGE")
-
+        if ai > 0.6:
+            verdict = "FAKE"
+            st.error("🚨 FAKE / AI GENERATED")
+        elif ai < 0.4:
+            verdict = "REAL"
+            st.success("✅ REAL IMAGE")
         else:
-            verdict = "ERROR"
+            verdict = "UNCERTAIN"
+            st.warning("⚠️ UNCERTAIN RESULT")
 
         st.session_state.history.append({
             "Time": datetime.now().strftime("%H:%M:%S"),
