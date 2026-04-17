@@ -1,137 +1,111 @@
 import os
 import streamlit as st
 from PIL import Image
+import numpy as np
 import pandas as pd
 from datetime import datetime
 import time
-import google.generativeai as genai
-import numpy as np
 
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+st.set_page_config(page_title="LuminaCheck AI", layout="wide")
 
-st.set_page_config(page_title="LuminaCheck AI", page_icon="🔍", layout="wide")
-
-# ------------------- FORENSIC ANALYSIS -------------------
-def analyze_image(image):
+# ------------------- ANALYSIS -------------------
+def analyze(image):
     gray = image.convert("L")
     arr = np.array(gray)
 
-    # variance (noise level)
     variance = np.var(arr)
-
-    # edge detection (simple gradient)
     edges = np.mean(np.abs(np.diff(arr)))
 
-    # sharpness
-    sharpness = variance
+    exif = image.getexif()
 
     score = 0.5
 
-    if variance < 400:
-        score += 0.2   # smooth → AI
+    # Noise
+    if variance < 300:
+        score += 0.2
     else:
         score -= 0.1
 
+    # Edges
     if edges < 20:
         score += 0.1
     else:
         score -= 0.05
 
-    return max(0, min(1, score))
-
-
-# ------------------- GEMINI -------------------
-def detect_with_gemini(image):
-    if not GEMINI_API_KEY:
-        return None
-
-    try:
-        genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel("gemini-2.5-flash")
-
-        prompt = """
-        Detect if this image is AI-generated or real.
-        Respond only:
-        AI: <number>
-        """
-
-        response = model.generate_content([prompt, image])
-        text = response.text
-
-        for line in text.split("\n"):
-            if "AI:" in line:
-                return float(line.split(":")[1].strip()) / 100
-
-    except:
-        return None
-
-
-# ------------------- FINAL DECISION -------------------
-def detect(image):
-    forensic_score = analyze_image(image)
-    gemini_score = detect_with_gemini(image)
-
-    if gemini_score is not None:
-        final_ai = (0.6 * gemini_score) + (0.4 * forensic_score)
+    # Metadata
+    if len(exif) == 0:
+        score += 0.2
     else:
-        final_ai = forensic_score
+        score -= 0.1
 
-    return final_ai, 1 - final_ai
+    return max(0, min(1, score))
 
 
 # ------------------- UI -------------------
 st.title("🔍 LuminaCheck AI")
-st.write("Advanced AI + Forensic Fake Image Detection")
+st.subheader("Deepfake Detection Analysis")
 
-if "history" not in st.session_state:
-    st.session_state.history = []
-
-uploaded_file = st.file_uploader("Upload Image", type=["jpg", "jpeg", "png"])
+uploaded_file = st.file_uploader("Upload Image", type=["jpg","png","jpeg"])
 
 if uploaded_file:
     image = Image.open(uploaded_file)
-    st.image(image, use_container_width=True)
+
+    st.image(image, width=300)
 
     if st.button("Analyze Image"):
 
         progress = st.progress(0)
         for i in range(100):
             time.sleep(0.01)
-            progress.progress(i + 1)
+            progress.progress(i+1)
 
-        ai, real = detect(image)
+        ai = analyze(image)
+        real = 1 - ai
 
         ai_percent = round(ai * 100)
-        real_percent = round(real * 100)
 
-        st.subheader("Result")
+        # Confidence logic
+        if ai > 0.75:
+            confidence = "High"
+            label = "AI Generated"
+            color = "red"
+        elif ai < 0.25:
+            confidence = "High"
+            label = "Real"
+            color = "green"
+        else:
+            confidence = "Low"
+            label = "Suspicious"
+            color = "orange"
+
+        # ------------------- RESULT UI -------------------
+        st.markdown("### Result")
+
+        st.progress(ai)
 
         st.write(f"AI Probability: {ai_percent}%")
-        st.write(f"Real Probability: {real_percent}%")
+        st.write(f"Confidence: {confidence}")
+        st.write(f"Classification: {label}")
 
-        if ai > 0.6:
-            verdict = "FAKE"
-            st.error("🚨 FAKE / AI GENERATED")
-        elif ai < 0.4:
-            verdict = "REAL"
+        if label == "AI Generated":
+            st.error("🚨 AI GENERATED IMAGE")
+        elif label == "Real":
             st.success("✅ REAL IMAGE")
         else:
-            verdict = "UNCERTAIN"
-            st.warning("⚠️ UNCERTAIN RESULT")
+            st.warning("⚠️ SUSPICIOUS IMAGE")
+
+        # History
+        if "history" not in st.session_state:
+            st.session_state.history = []
 
         st.session_state.history.append({
             "Time": datetime.now().strftime("%H:%M:%S"),
             "File": uploaded_file.name,
-            "Result": verdict
+            "Result": label
         })
 
-
 # ------------------- HISTORY -------------------
-st.subheader("Detection History")
-
-if st.session_state.history:
+if "history" in st.session_state:
+    st.subheader("Detection History")
     df = pd.DataFrame(st.session_state.history)
-    st.dataframe(df, use_container_width=True)
-
-    csv = df.to_csv(index=False)
-    st.download_button("Download CSV", csv, "report.csv")
+    st.dataframe(df)
