@@ -7,7 +7,7 @@ import pandas as pd
 from datetime import datetime
 import time
 
-# 🔐 Secure keys from Streamlit Secrets
+# 🔐 Load from Streamlit Secrets
 HIVE_ACCESS_KEY = os.environ.get("HIVE_ACCESS_KEY")
 HIVE_SECRET_KEY = os.environ.get("HIVE_SECRET_KEY")
 
@@ -16,54 +16,59 @@ st.set_page_config(page_title="LuminaCheck AI", page_icon="🔍", layout="wide")
 # ------------------- HIVE V3 FUNCTION -------------------
 def detect_with_hive(image_bytes):
     if not HIVE_ACCESS_KEY or not HIVE_SECRET_KEY:
-        st.error("❌ Hive API keys missing. Add them in Streamlit Secrets.")
+        st.error("❌ Hive API keys missing. Check Streamlit Secrets.")
         return None, None
 
     url = "https://api.thehive.ai/api/v3/tasks/sync"
 
     try:
-        files = {
-            "media": ("image.jpg", image_bytes, "image/jpeg")
-        }
-
-        headers = {
-            "x-api-key": HIVE_ACCESS_KEY,
-            "x-api-secret": HIVE_SECRET_KEY
-        }
-
-        response = requests.post(url, headers=headers, files=files, timeout=20)
+        response = requests.post(
+            url,
+            headers={
+                "x-api-key": HIVE_ACCESS_KEY,
+                "x-api-secret": HIVE_SECRET_KEY
+            },
+            files={"media": ("image.jpg", image_bytes, "image/jpeg")},
+            timeout=20
+        )
 
         if response.status_code != 200:
-            st.error(f"Hive API Error {response.status_code}")
+            st.error(f"❌ Hive API Error {response.status_code}")
             st.write(response.text)
             return None, None
 
         data = response.json()
 
-        classes = data["output"][0]["classes"]
+        # Safe parsing
+        output = data.get("output", [])
+        if not output:
+            st.error("❌ No output from Hive")
+            return None, None
+
+        classes = output[0].get("classes", [])
 
         ai_score = 0
         real_score = 0
 
         for c in classes:
-            name = c["class"].lower()
-            score = c["score"]
+            name = c.get("class", "").lower()
+            score = c.get("score", 0)
 
             if "ai" in name or "fake" in name or "generated" in name:
                 ai_score = score
-            if "real" in name or "human" in name:
+            elif "real" in name or "human" in name:
                 real_score = score
 
         return ai_score, real_score
 
     except Exception as e:
-        st.error(f"Error: {str(e)}")
+        st.error(f"❌ Connection Error: {str(e)}")
         return None, None
 
 
 # ------------------- UI -------------------
 st.title("🔍 LuminaCheck AI")
-st.write("Upload image to detect REAL or AI GENERATED")
+st.write("Detect whether an image is REAL or AI-GENERATED")
 
 if "history" not in st.session_state:
     st.session_state.history = []
@@ -100,10 +105,10 @@ if uploaded_file:
 
             if ai > 0.5:
                 verdict = "FAKE"
-                st.error("FAKE / AI GENERATED")
+                st.error("🚨 FAKE / AI GENERATED")
             else:
                 verdict = "REAL"
-                st.success("REAL IMAGE")
+                st.success("✅ REAL IMAGE")
 
         else:
             verdict = "ERROR"
@@ -116,7 +121,7 @@ if uploaded_file:
 
 
 # ------------------- HISTORY -------------------
-st.subheader("History")
+st.subheader("Detection History")
 
 if st.session_state.history:
     df = pd.DataFrame(st.session_state.history)
