@@ -7,16 +7,13 @@ import google.generativeai as genai
 import re
 import time
 import numpy as np
-import requests
-from io import BytesIO
 
-# 🔐 API Keys
+# 🔐 API Key
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-HUGGINGFACE_API_KEY = os.environ.get("HUGGINGFACE_API_KEY")
 
 st.set_page_config(page_title="LuminaCheck AI", layout="wide")
 
-# ------------------- SESSION STATE -------------------
+# ------------------- SESSION -------------------
 if "history" not in st.session_state:
     st.session_state.history = []
 
@@ -44,7 +41,7 @@ def analyze_metadata(image):
             return 0.9
 
         if any(x in text for x in ["photoshop", "gimp", "editor"]):
-            return 0.5
+            return 0.55
 
         if any(x in text for x in ["canon", "nikon", "sony", "iphone", "camera"]):
             return 0.2
@@ -60,11 +57,12 @@ def analyze_forensics(image):
     try:
         gray = image.convert("L")
         arr = np.array(gray)
+
         variance = arr.var()
 
-        if variance < 250:
-            return 0.7
-        elif variance > 1800:
+        if variance < 200:
+            return 0.75
+        elif variance > 2000:
             return 0.3
         else:
             return 0.5
@@ -78,9 +76,9 @@ def analyze_filename(filename):
     name = filename.lower()
 
     if any(x in name for x in ["ai", "dalle", "midjourney", "generated"]):
-        return 0.8
+        return 0.75
 
-    return 0.4
+    return 0.45
 
 
 # ------------------- GEMINI SCORE -------------------
@@ -89,10 +87,21 @@ def detect_with_gemini(image):
         genai.configure(api_key=GEMINI_API_KEY)
         model = genai.GenerativeModel("gemini-2.5-flash")
 
-        prompt = """Return a number between 0 and 100 indicating likelihood of AI generation."""
+        prompt = """
+You are an expert AI image detector.
+
+Return ONLY a number from 0 to 100.
+
+0 = real photo
+100 = AI generated
+
+Be strict. Do not guess randomly.
+"""
 
         response = model.generate_content([prompt, image])
-        match = re.search(r"\d+", str(response.text))
+        text = str(response.text)
+
+        match = re.search(r"\d+", text)
 
         if match:
             return float(match.group()) / 100
@@ -103,14 +112,29 @@ def detect_with_gemini(image):
         return 0.5
 
 
-# ------------------- GEMINI REASON -------------------
+# ------------------- STRUCTURED REASON -------------------
 def get_reason(image):
     try:
         genai.configure(api_key=GEMINI_API_KEY)
         model = genai.GenerativeModel("gemini-2.5-flash")
 
         prompt = """
-Give 3 short reasons why this image might be AI-generated or real.
+Analyze the image and return structured reasoning.
+
+Format EXACTLY like this:
+
+AI Indicators:
+- ...
+- ...
+
+Real Indicators:
+- ...
+- ...
+
+Final Verdict:
+- ...
+
+Keep it short and clear.
 """
 
         response = model.generate_content([prompt, image])
@@ -118,7 +142,7 @@ Give 3 short reasons why this image might be AI-generated or real.
         if response and response.text:
             return response.text.strip()
 
-        return "Low confidence explanation"
+        return "No explanation available"
 
     except Exception as e:
         return f"Reason error: {e}"
@@ -126,53 +150,27 @@ Give 3 short reasons why this image might be AI-generated or real.
 
 # ------------------- FINAL DETECTION -------------------
 def detect(image, filename):
-    gemini_score = detect_with_gemini(image)
-    metadata_score = analyze_metadata(image)
-    forensics_score = analyze_forensics(image)
-    filename_score = analyze_filename(filename)
+    g = detect_with_gemini(image)
+    m = analyze_metadata(image)
+    f = analyze_forensics(image)
+    n = analyze_filename(filename)
 
-    base_score = (
-        (0.7 * gemini_score) +
-        (0.15 * metadata_score) +
-        (0.1 * forensics_score) +
-        (0.05 * filename_score)
-    )
+    # 🔥 improved weights
+    score = (0.65 * g) + (0.2 * m) + (0.1 * f) + (0.05 * n)
 
-    return base_score
+    # 🔥 disagreement control
+    if max([g, m, f]) - min([g, m, f]) > 0.6:
+        score = 0.5
+
+    return score
 
 
 # ------------------- UI -------------------
 st.title("🔍 LuminaCheck AI")
-st.caption("Hybrid AI Detection System")
+st.caption("AI Image Detection System")
 
 uploaded_file = st.file_uploader("Upload Image", type=["jpg", "jpeg", "png"])
 
-
-# ✅ HuggingFace Test Button (FIXED)
-if st.button("🧪 Test HuggingFace Connection"):
-    api_key = HUGGINGFACE_API_KEY
-
-    if not api_key:
-        st.error("HF key missing")
-    else:
-        try:
-            headers = {"Authorization": f"Bearer {api_key}"}
-
-            img_url = "https://upload.wikimedia.org/wikipedia/commons/3/3f/Fronalpstock_big.jpg"
-            img_bytes = requests.get(img_url, headers={"User-Agent": "Mozilla/5.0"}).content
-
-            API_URL = "https://api-inference.huggingface.co/models/google/vit-base-patch16-224"
-
-            res = requests.post(API_URL, headers=headers, data=img_bytes)
-
-            st.write("Status:", res.status_code)
-            st.write("Response:", res.text[:300])
-
-        except Exception as e:
-            st.error(f"HF test failed: {e}")
-
-
-# ------------------- IMAGE ANALYSIS -------------------
 if uploaded_file:
     image = Image.open(uploaded_file).convert("RGB")
 
@@ -190,15 +188,16 @@ if uploaded_file:
             st.session_state.last_result = score
             st.session_state.last_reason = reason
 
-            if score > 0.8:
+            if score > 0.75:
                 label = "AI Generated"
-            elif score < 0.45:
+            elif score < 0.4:
                 label = "Likely Real"
             else:
                 label = "Suspicious"
 
             st.session_state.last_label = label
 
+    # ------------------- RESULT -------------------
     if st.session_state.last_result is not None:
         score = st.session_state.last_result
         label = st.session_state.last_label
@@ -218,13 +217,13 @@ if uploaded_file:
             st.warning("⚠️ SUSPICIOUS IMAGE")
 
         confidence = abs(score - 0.5) * 2
-        conf_label = "High" if confidence > 0.7 else "Medium" if confidence > 0.3 else "Low"
 
-        st.markdown(f"**Confidence:** {conf_label}")
+        conf = "High" if confidence > 0.7 else "Medium" if confidence > 0.3 else "Low"
+        st.markdown(f"**Confidence:** {conf}")
 
-        if reason:
-            st.markdown("### 🔍 Why this result?")
-            st.write(reason)
+        st.markdown("---")
+        st.markdown("### 🔍 Analysis Breakdown")
+        st.write(reason)
 
         st.session_state.history.append({
             "Time": datetime.now().strftime("%H:%M:%S"),
@@ -240,4 +239,4 @@ if st.session_state.history:
     st.dataframe(df, use_container_width=True)
 
     csv = df.to_csv(index=False)
-    st.download_button("Download CSV Report", csv, "report.csv")
+    st.download_button("Download CSV", csv, "report.csv")
