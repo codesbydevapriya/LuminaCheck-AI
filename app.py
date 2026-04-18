@@ -187,6 +187,28 @@ st.caption("Hybrid AI Detection System")
 
 uploaded_file = st.file_uploader("Upload Image", type=["jpg", "jpeg", "png"])
 
+# 🔥 ADD THIS HERE
+if st.button("🧪 Test HuggingFace Connection"):
+    import requests
+    from io import BytesIO
+    from PIL import Image
+
+    api_key = os.environ.get("HUGGINGFACE_API_KEY")
+
+    if not api_key:
+        st.error("HF key missing")
+    else:
+        try:
+            headers = {
+                "Authorization": f"Bearer {api_key}"
+            }
+
+            url = "https://upload.wikimedia.org/wikipedia/commons/3/3f/Fronalpstock_big.jpg"
+            response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
+
+            if response.status_code != 200:
+                st.error("Image
+
 if uploaded_file:
     image = Image.open(uploaded_file).convert("RGB")
 
