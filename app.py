@@ -6,8 +6,11 @@ import pandas as pd
 from datetime import datetime
 import tempfile
 
+If GEMINI_API_KEY exists → show "Key Loaded"
+Else → show "Key Missing"
+
 # 🔐 Token
-os.environ["REPLICATE_API_TOKEN"] = os.environ.get("REPLICATE_API_TOKEN")
+os.environ["GEMINI_API_KEY"] = os.environ.get("GEMINI_API_KEY")
 
 st.set_page_config(page_title="LuminaCheck AI", layout="wide")
 
