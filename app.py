@@ -23,17 +23,19 @@ if "last_result" not in st.session_state:
 if "last_label" not in st.session_state:
     st.session_state.last_label = None
 
+
 # ------------------- METADATA -------------------
 def analyze_metadata(image):
     try:
         exif = image.getexif()
 
+        # 🔥 FIXED: less aggressive
         if not exif or len(exif) == 0:
-            return 0.7
+            return 0.55
 
         text = " ".join([str(v).lower() for v in exif.values()])
 
-        if any(x in text for x in ["midjourney", "dalle", "stable diffusion", "ai"]):
+        if any(x in text for x in ["midjourney", "dalle", "stable diffusion"]):
             return 0.9
 
         if any(x in text for x in ["photoshop", "gimp", "editor"]):
@@ -53,11 +55,13 @@ def analyze_forensics(image):
     try:
         gray = image.convert("L")
         arr = np.array(gray)
+
         variance = arr.var()
 
-        if variance < 300:
+        # 🔥 improved logic
+        if variance < 250:
             return 0.7
-        elif variance > 1500:
+        elif variance > 1800:
             return 0.3
         else:
             return 0.5
@@ -82,8 +86,8 @@ def detect_with_gemini(image):
         genai.configure(api_key=GEMINI_API_KEY)
         model = genai.GenerativeModel("gemini-2.5-flash")
 
-        prompt = """
-        You are an expert forensic image analyst specializing in detecting AI-generated images. 
+        prompt = prompt = """
+You are an expert forensic image analyst specializing in detecting AI-generated images. 
 You will analyze the uploaded image with extreme precision across every possible dimension.
 
 Examine ALL of the following aspects thoroughly before reaching a conclusion:
@@ -138,7 +142,7 @@ Respond with ONLY a single integer between 0 and 100.
 0 = Certainly real photograph.
 100 = Certainly AI-generated.
 No explanation. No text. No punctuation. Just the number.
-        """
+"""
 
         for _ in range(3):
             try:
@@ -171,14 +175,25 @@ def detect(image, filename):
     if gemini_score is None:
         return None
 
-    final_score = (
-        (0.6 * gemini_score) +
-        (0.2 * metadata_score) +
-        (0.15 * forensics_score) +
+    # 🔥 NEW WEIGHTS (better trust balance)
+    base_score = (
+        (0.7 * gemini_score) +
+        (0.15 * metadata_score) +
+        (0.1 * forensics_score) +
         (0.05 * filename_score)
     )
 
-    return final_score
+    # 🔥 DISAGREEMENT PENALTY
+    scores = [gemini_score, metadata_score, forensics_score]
+    max_s = max(scores)
+    min_s = min(scores)
+
+    disagreement = max_s - min_s
+
+    if disagreement > 0.5:
+        base_score = (base_score + 0.5) / 2
+
+    return base_score
 
 
 # ------------------- UI -------------------
@@ -206,10 +221,10 @@ if uploaded_file:
 
             st.session_state.last_result = score
 
-            # Classification
-            if score > 0.75:
+            # 🔥 FIXED thresholds
+            if score > 0.8:
                 label = "AI Generated"
-            elif score < 0.4:
+            elif score < 0.45:
                 label = "Likely Real"
             else:
                 label = "Suspicious"
@@ -248,7 +263,6 @@ if uploaded_file:
         st.markdown("---")
         st.caption("Analysis based on AI model, metadata, image structure, and filename patterns.")
 
-        # Save history safely
         st.session_state.history.append({
             "Time": datetime.now().strftime("%H:%M:%S"),
             "File": uploaded_file.name,
