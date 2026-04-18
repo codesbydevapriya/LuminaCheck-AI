@@ -13,6 +13,16 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
 st.set_page_config(page_title="LuminaCheck AI", layout="wide")
 
+# ------------------- SESSION STATE -------------------
+if "history" not in st.session_state:
+    st.session_state.history = []
+
+if "last_result" not in st.session_state:
+    st.session_state.last_result = None
+
+if "last_label" not in st.session_state:
+    st.session_state.last_label = None
+
 # ------------------- METADATA -------------------
 def analyze_metadata(image):
     try:
@@ -74,9 +84,7 @@ def detect_with_gemini(image):
 
         prompt = """
         Analyze this image.
-
         Estimate how likely it is AI-generated.
-
         Respond ONLY with a number between 0 and 100.
         """
 
@@ -144,52 +152,59 @@ if uploaded_file:
                 st.error("Detection failed. Try again.")
                 st.stop()
 
-            percent = round(score * 100)
-
-            st.markdown("## Result")
-
-            st.progress(score)
-
-            st.markdown(f"### AI Probability: {percent}%")
+            st.session_state.last_result = score
 
             # Classification
             if score > 0.75:
                 label = "AI Generated"
-                st.error("🚨 AI GENERATED IMAGE")
             elif score < 0.4:
                 label = "Likely Real"
-                st.success("✅ LIKELY REAL IMAGE")
             else:
                 label = "Suspicious"
-                st.warning("⚠️ SUSPICIOUS IMAGE")
 
-            # Confidence
-            confidence = abs(score - 0.5) * 2
+            st.session_state.last_label = label
 
-            if confidence > 0.7:
-                conf_label = "High"
-            elif confidence > 0.3:
-                conf_label = "Medium"
-            else:
-                conf_label = "Low"
+    # ------------------- RESULT DISPLAY -------------------
+    if st.session_state.last_result is not None:
+        score = st.session_state.last_result
+        label = st.session_state.last_label
 
-            st.markdown(f"**Confidence:** {conf_label}")
+        percent = round(score * 100)
 
-            st.markdown("---")
-            st.caption("Analysis based on AI model, metadata, image structure, and filename patterns.")
+        st.markdown("## Result")
+        st.progress(score)
+        st.markdown(f"### AI Probability: {percent}%")
+
+        if label == "AI Generated":
+            st.error("🚨 AI GENERATED IMAGE")
+        elif label == "Likely Real":
+            st.success("✅ LIKELY REAL IMAGE")
+        else:
+            st.warning("⚠️ SUSPICIOUS IMAGE")
+
+        confidence = abs(score - 0.5) * 2
+
+        if confidence > 0.7:
+            conf_label = "High"
+        elif confidence > 0.3:
+            conf_label = "Medium"
+        else:
+            conf_label = "Low"
+
+        st.markdown(f"**Confidence:** {conf_label}")
+
+        st.markdown("---")
+        st.caption("Analysis based on AI model, metadata, image structure, and filename patterns.")
+
+        # Save history safely
+        st.session_state.history.append({
+            "Time": datetime.now().strftime("%H:%M:%S"),
+            "File": uploaded_file.name,
+            "Result": label
+        })
 
 
 # ------------------- HISTORY -------------------
-if "history" not in st.session_state:
-    st.session_state.history = []
-
-if uploaded_file and score is not None:
-    st.session_state.history.append({
-        "Time": datetime.now().strftime("%H:%M:%S"),
-        "File": uploaded_file.name,
-        "Result": label
-    })
-
 if st.session_state.history:
     st.markdown("## Detection History")
     df = pd.DataFrame(st.session_state.history)
