@@ -10,7 +10,7 @@ import time
 # 🔐 Load API Key
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
-# ✅ Debug check (temporary)
+# Debug check
 if GEMINI_API_KEY:
     st.success("✅ Gemini API Key Loaded")
 else:
@@ -18,11 +18,33 @@ else:
 
 st.set_page_config(page_title="LuminaCheck AI", layout="wide")
 
-# ------------------- GEMINI DETECTION -------------------
-def detect(image):
-    if not GEMINI_API_KEY:
-        return None, None
+# ------------------- METADATA ANALYSIS -------------------
+def analyze_metadata(image):
+    try:
+        exif = image.getexif()
 
+        if not exif or len(exif) == 0:
+            return 0.7
+
+        text = " ".join([str(v).lower() for v in exif.values()])
+
+        if any(x in text for x in ["midjourney", "dalle", "stable diffusion", "ai"]):
+            return 0.9
+
+        if any(x in text for x in ["photoshop", "gimp", "editor"]):
+            return 0.5
+
+        if any(x in text for x in ["canon", "nikon", "sony", "iphone", "camera"]):
+            return 0.2
+
+        return 0.4
+
+    except:
+        return 0.5
+
+
+# ------------------- GEMINI DETECTION -------------------
+def detect_with_gemini(image):
     try:
         genai.configure(api_key=GEMINI_API_KEY)
         model = genai.GenerativeModel("gemini-2.5-flash")
@@ -35,7 +57,6 @@ def detect(image):
         Respond ONLY with a number between 0 and 100.
         """
 
-        # Retry logic
         for _ in range(3):
             try:
                 response = model.generate_content([prompt, image])
@@ -43,8 +64,7 @@ def detect(image):
 
                 match = re.search(r"\d+", text)
                 if match:
-                    score = float(match.group()) / 100
-                    return score, 1 - score
+                    return float(match.group()) / 100
 
             except Exception as e:
                 if "429" in str(e):
@@ -54,14 +74,31 @@ def detect(image):
                     break
 
     except Exception as e:
-        st.error(f"Error: {e}")
+        st.error(f"Gemini Error: {e}")
 
-    return None, None
+    return None
+
+
+# ------------------- FINAL DETECTION -------------------
+def detect(image):
+    if not GEMINI_API_KEY:
+        return None
+
+    gemini_score = detect_with_gemini(image)
+    metadata_score = analyze_metadata(image)
+
+    if gemini_score is None:
+        return None
+
+    # 🔥 Weighted combination
+    final_score = (0.6 * gemini_score) + (0.2 * metadata_score)
+
+    return final_score, gemini_score, metadata_score
 
 
 # ------------------- UI -------------------
 st.title("🔍 LuminaCheck AI")
-st.caption("AI Image Detection using Gemini")
+st.caption("Hybrid AI Detection (Gemini + Metadata)")
 
 if "history" not in st.session_state:
     st.session_state.history = []
@@ -74,35 +111,52 @@ if uploaded_file:
 
     if st.button("Analyze Image"):
 
-        ai, real = detect(image)
+        result = detect(image)
 
-        if ai is None:
+        if result is None:
             st.warning("Detection failed. Try again.")
             st.stop()
 
-        ai_percent = round(ai * 100)
+        final_score, gemini_score, metadata_score = result
+
+        percent = round(final_score * 100)
 
         st.markdown("### Result")
-        st.progress(ai)
+        st.progress(final_score)
 
-        st.write(f"AI Probability: {ai_percent}%")
+        st.write(f"AI Probability: {percent}%")
+
+        # Debug (you can remove later)
+        st.write(f"Gemini Score: {round(gemini_score*100)}%")
+        st.write(f"Metadata Score: {round(metadata_score*100)}%")
 
         # Classification
-        if ai > 0.7:
-            result = "Likely AI Generated"
-            st.error("🚨 Likely AI Generated")
-        elif ai < 0.3:
-            result = "Likely Real"
-            st.success("✅ Likely Real Image")
+        if final_score > 0.75:
+            label = "AI Generated"
+            st.error("🚨 AI GENERATED IMAGE")
+        elif final_score < 0.4:
+            label = "Likely Real"
+            st.success("✅ LIKELY REAL IMAGE")
         else:
-            result = "Uncertain"
-            st.warning("⚠️ Unable to confidently classify")
+            label = "Suspicious"
+            st.warning("⚠️ SUSPICIOUS IMAGE")
+
+        # Confidence
+        confidence = abs(final_score - 0.5) * 2
+        if confidence > 0.7:
+            conf_label = "High"
+        elif confidence > 0.3:
+            conf_label = "Medium"
+        else:
+            conf_label = "Low"
+
+        st.write(f"Confidence: {conf_label}")
 
         # Save history
         st.session_state.history.append({
             "Time": datetime.now().strftime("%H:%M:%S"),
             "File": uploaded_file.name,
-            "Result": result
+            "Result": label
         })
 
 
