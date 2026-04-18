@@ -29,7 +29,6 @@ def analyze_metadata(image):
     try:
         exif = image.getexif()
 
-        # 🔥 FIXED: less aggressive
         if not exif or len(exif) == 0:
             return 0.55
 
@@ -55,10 +54,8 @@ def analyze_forensics(image):
     try:
         gray = image.convert("L")
         arr = np.array(gray)
-
         variance = arr.var()
 
-        # 🔥 improved logic
         if variance < 250:
             return 0.7
         elif variance > 1800:
@@ -86,62 +83,18 @@ def detect_with_gemini(image):
         genai.configure(api_key=GEMINI_API_KEY)
         model = genai.GenerativeModel("gemini-2.5-flash")
 
-        prompt = prompt = """
+        prompt = """
 You are an expert forensic image analyst specializing in detecting AI-generated images. 
 You will analyze the uploaded image with extreme precision across every possible dimension.
 
-Examine ALL of the following aspects thoroughly before reaching a conclusion:
-
-TEXTURE & SURFACE ANALYSIS:
-- Skin pores, hair strands, fabric weave — are they consistent and physically plausible?
-- Do surfaces have realistic imperfections, wear, and variation?
-- Are textures too smooth, repetitive, or unnaturally perfect?
-
-GEOMETRIC & STRUCTURAL INTEGRITY:
-- Count fingers, teeth, ears, eyes — are quantities and symmetry correct?
-- Do hands, feet, and limbs follow correct anatomical proportions?
-- Are straight lines truly straight (walls, floors, furniture edges)?
-- Do glasses, jewelry, and accessories have consistent shape across the full object?
-
-LIGHTING & SHADOW CONSISTENCY:
-- Is there a single coherent light source, or do shadows contradict each other?
-- Do reflections in eyes, glasses, and shiny surfaces match the environment?
-- Is subsurface scattering on skin physically realistic?
-
-BACKGROUND & ENVIRONMENT:
-- Is background text legible and correctly spelled?
-- Do background objects maintain consistent perspective and scale?
-- Are there repeated or mirrored elements in the background?
-- Do edges between subject and background show blending artifacts or halos?
-
-FINE DETAIL EXAMINATION:
-- Zoom into ears — are the folds anatomically correct?
-- Examine hairline edges — are individual strands distinguishable or merged into blobs?
-- Check jewelry, buttons, zippers — are they symmetrical and physically coherent?
-- Look at eyes closely — are catchlights, pupils, irises, and veins realistic?
-
-AI ARTIFACT DETECTION:
-- Are there any areas of unusual smoothness surrounded by detail?
-- Do facial features drift or look slightly "melted"?
-- Is there inconsistent resolution — some areas sharp, others inexplicably soft?
-- Are patterns (tiles, fabric, wallpaper) coherent or do they break down on inspection?
-
-METADATA INDICATORS (visual):
-- Does the overall aesthetic feel "too perfect" with no motion blur, lens distortion, or chromatic aberration?
-- Is the depth of field physically consistent with the apparent focal length?
-- Are there any watermarks, signatures, or generation artifacts visible?
-
-CROSS-CHECK:
-After examining every aspect above, weigh the evidence. Consider that:
-- A single major anomaly (e.g., 6 fingers, impossible shadow) is strong evidence of AI generation.
-- Multiple minor anomalies compound into high confidence.
-- Photorealistic images can still be AI-generated — absence of obvious flaws does not mean real.
+Examine ALL aspects: texture realism, anatomical correctness, lighting consistency,
+background coherence, fine details, and AI artifacts.
 
 OUTPUT INSTRUCTION:
 Respond with ONLY a single integer between 0 and 100.
 0 = Certainly real photograph.
 100 = Certainly AI-generated.
-No explanation. No text. No punctuation. Just the number.
+No explanation.
 """
 
         for _ in range(3):
@@ -175,7 +128,10 @@ def detect(image, filename):
     if gemini_score is None:
         return None
 
-    # 🔥 NEW WEIGHTS (better trust balance)
+    # 🔥 Clamp Gemini extremes
+    gemini_score = max(0.1, min(0.9, gemini_score))
+
+    # 🔥 Base score
     base_score = (
         (0.7 * gemini_score) +
         (0.15 * metadata_score) +
@@ -183,15 +139,19 @@ def detect(image, filename):
         (0.05 * filename_score)
     )
 
-    # 🔥 DISAGREEMENT PENALTY
+    # 🔥 Disagreement handling
     scores = [gemini_score, metadata_score, forensics_score]
-    max_s = max(scores)
-    min_s = min(scores)
-
-    disagreement = max_s - min_s
+    disagreement = max(scores) - min(scores)
 
     if disagreement > 0.5:
-        base_score = (base_score + 0.5) / 2
+        base_score = (base_score * 0.7) + (0.5 * 0.3)
+
+    if disagreement > 0.7:
+        base_score = 0.5
+
+    # 🔥 Stabilize middle
+    if 0.4 < base_score < 0.6:
+        base_score = 0.5
 
     return base_score
 
@@ -221,7 +181,6 @@ if uploaded_file:
 
             st.session_state.last_result = score
 
-            # 🔥 FIXED thresholds
             if score > 0.8:
                 label = "AI Generated"
             elif score < 0.45:
