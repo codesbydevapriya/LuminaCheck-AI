@@ -7,9 +7,13 @@ import google.generativeai as genai
 import re
 import time
 import numpy as np
+import requests
+import base64
+from io import BytesIO
 
-# 🔐 API Key
+# 🔐 API Keys
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 
 st.set_page_config(page_title="LuminaCheck AI", layout="wide")
 
@@ -86,60 +90,7 @@ def detect_with_gemini(image):
         genai.configure(api_key=GEMINI_API_KEY)
         model = genai.GenerativeModel("gemini-2.5-flash")
 
-        prompt = """
-You are an expert forensic image analyst specializing in detecting AI-generated images. 
-You will analyze the uploaded image with extreme precision across every possible dimension.
-
-Examine ALL of the following aspects thoroughly before reaching a conclusion:
-
-TEXTURE & SURFACE ANALYSIS:
-- Skin pores, hair strands, fabric weave — are they consistent and physically plausible?
-- Do surfaces have realistic imperfections, wear, and variation?
-- Are textures too smooth, repetitive, or unnaturally perfect?
-
-GEOMETRIC & STRUCTURAL INTEGRITY:
-- Count fingers, teeth, ears, eyes — are quantities and symmetry correct?
-- Do hands, feet, and limbs follow correct anatomical proportions?
-- Are straight lines truly straight (walls, floors, furniture edges)?
-- Do glasses, jewelry, and accessories have consistent shape across the full object?
-
-LIGHTING & SHADOW CONSISTENCY:
-- Is there a single coherent light source, or do shadows contradict each other?
-- Do reflections in eyes, glasses, and shiny surfaces match the environment?
-- Is subsurface scattering on skin physically realistic?
-
-BACKGROUND & ENVIRONMENT:
-- Is background text legible and correctly spelled?
-- Do background objects maintain consistent perspective and scale?
-- Are there repeated or mirrored elements in the background?
-- Do edges between subject and background show blending artifacts or halos?
-
-FINE DETAIL EXAMINATION:
-- Zoom into ears — are the folds anatomically correct?
-- Examine hairline edges — are individual strands distinguishable or merged into blobs?
-- Check jewelry, buttons, zippers — are they symmetrical and physically coherent?
-- Look at eyes closely — are catchlights, pupils, irises, and veins realistic?
-
-AI ARTIFACT DETECTION:
-- Are there any areas of unusual smoothness surrounded by detail?
-- Do facial features drift or look slightly "melted"?
-- Is there inconsistent resolution — some areas sharp, others inexplicably soft?
-- Are patterns (tiles, fabric, wallpaper) coherent or do they break down on inspection?
-
-METADATA INDICATORS (visual):
-- Does the overall aesthetic feel "too perfect" with no motion blur, lens distortion, or chromatic aberration?
-- Is the depth of field physically consistent with the apparent focal length?
-- Are there any watermarks, signatures, or generation artifacts visible?
-
-CROSS-CHECK:
-After examining every aspect above, weigh the evidence.
-
-OUTPUT INSTRUCTION:
-Respond with ONLY a single integer between 0 and 100.
-0 = Certainly real photograph.
-100 = Certainly AI-generated.
-No explanation. No text. No punctuation. Just the number.
-"""
+        prompt = """YOUR SAME FORENSIC PROMPT"""
 
         for _ in range(3):
             try:
@@ -161,11 +112,16 @@ No explanation. No text. No punctuation. Just the number.
         return 0.5
 
 
-# ------------------- GEMINI REASON -------------------
+# ------------------- OPENROUTER REASON -------------------
 def get_reason(image):
     try:
-        genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel("gemini-2.5-flash")
+        if not OPENROUTER_API_KEY:
+            return "OpenRouter API key missing"
+
+        # convert image to base64
+        buffered = BytesIO()
+        image.save(buffered, format="JPEG")
+        img_base64 = base64.b64encode(buffered.getvalue()).decode()
 
         prompt = """
 Analyze this image and explain why it might be AI-generated or real.
@@ -179,29 +135,41 @@ Focus on:
 - background coherence
 - unnatural smoothness
 
-Do not give probability.
 Keep it short.
 """
 
-        for _ in range(2):
-            try:
-                response = model.generate_content([prompt, image])
+        response = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": "openai/gpt-4o-mini",
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{img_base64}"
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        )
 
-                if response and response.text:
-                    return response.text.strip()
+        data = response.json()
 
-            except Exception as e:
-                if "429" in str(e):
-                    st.warning("Rate limit hit. Retrying...")
-                    time.sleep(3)
-                else:
-                    st.warning(f"Reason error: {e}")
-
-        # 🔥 fallback (but better than empty)
-        return "Low confidence analysis. Unable to extract clear reasoning."
+        return data["choices"][0]["message"]["content"]
 
     except Exception as e:
-        return f"Reason failed: {e}"
+        return f"Reason error: {e}"
+
 
 # ------------------- FINAL DETECTION -------------------
 def detect(image, filename):
@@ -295,7 +263,6 @@ if uploaded_file:
 
         st.markdown(f"**Confidence:** {conf_label}")
 
-        # 🔥 NEW SECTION
         if reason:
             st.markdown("### 🔍 Why this result?")
             st.write(reason)
