@@ -8,18 +8,12 @@ import re
 import time
 import numpy as np
 
-# 🔐 Load API Key
+# 🔐 API Key
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-
-# Debug check
-if GEMINI_API_KEY:
-    st.success("✅ Gemini API Key Loaded")
-else:
-    st.error("❌ Gemini API Key Missing")
 
 st.set_page_config(page_title="LuminaCheck AI", layout="wide")
 
-# ------------------- METADATA ANALYSIS -------------------
+# ------------------- METADATA -------------------
 def analyze_metadata(image):
     try:
         exif = image.getexif()
@@ -44,26 +38,35 @@ def analyze_metadata(image):
         return 0.5
 
 
-# ------------------- FORENSICS ANALYSIS -------------------
+# ------------------- FORENSICS -------------------
 def analyze_forensics(image):
     try:
         gray = image.convert("L")
         arr = np.array(gray)
-
         variance = arr.var()
 
         if variance < 300:
-            return 0.7   # too smooth → AI-like
+            return 0.7
         elif variance > 1500:
-            return 0.3   # natural noise → real
+            return 0.3
         else:
-            return 0.5   # uncertain
+            return 0.5
 
     except:
         return 0.5
 
 
-# ------------------- GEMINI DETECTION -------------------
+# ------------------- FILENAME -------------------
+def analyze_filename(filename):
+    name = filename.lower()
+
+    if any(x in name for x in ["ai", "dalle", "midjourney", "generated"]):
+        return 0.8
+
+    return 0.4
+
+
+# ------------------- GEMINI -------------------
 def detect_with_gemini(image):
     try:
         genai.configure(api_key=GEMINI_API_KEY)
@@ -88,109 +91,109 @@ def detect_with_gemini(image):
 
             except Exception as e:
                 if "429" in str(e):
-                    st.warning("Rate limit hit, retrying...")
                     time.sleep(5)
                 else:
                     break
 
-    except Exception as e:
-        st.error(f"Gemini Error: {e}")
+    except:
+        return None
 
     return None
 
 
 # ------------------- FINAL DETECTION -------------------
-def detect(image):
-    if not GEMINI_API_KEY:
-        return None
-
+def detect(image, filename):
     gemini_score = detect_with_gemini(image)
     metadata_score = analyze_metadata(image)
     forensics_score = analyze_forensics(image)
+    filename_score = analyze_filename(filename)
 
     if gemini_score is None:
         return None
 
-    # 🔥 Weighted combination
     final_score = (
         (0.6 * gemini_score) +
         (0.2 * metadata_score) +
-        (0.15 * forensics_score)
+        (0.15 * forensics_score) +
+        (0.05 * filename_score)
     )
 
-    return final_score, gemini_score, metadata_score, forensics_score
+    return final_score
 
 
 # ------------------- UI -------------------
 st.title("🔍 LuminaCheck AI")
-st.caption("Hybrid AI Detection (Gemini + Metadata + Forensics)")
-
-if "history" not in st.session_state:
-    st.session_state.history = []
+st.caption("Hybrid AI Detection System")
 
 uploaded_file = st.file_uploader("Upload Image", type=["jpg", "jpeg", "png"])
 
 if uploaded_file:
     image = Image.open(uploaded_file).convert("RGB")
-    st.image(image, width=300)
 
-    if st.button("Analyze Image"):
+    col1, col2 = st.columns([1, 1.2])
 
-        result = detect(image)
+    with col1:
+        st.image(image, use_container_width=True)
 
-        if result is None:
-            st.warning("Detection failed. Try again.")
-            st.stop()
+    with col2:
+        if st.button("Analyze Image"):
 
-        final_score, gemini_score, metadata_score, forensics_score = result
+            score = detect(image, uploaded_file.name)
 
-        percent = round(final_score * 100)
+            if score is None:
+                st.error("Detection failed. Try again.")
+                st.stop()
 
-        st.markdown("### Result")
-        st.progress(final_score)
+            percent = round(score * 100)
 
-        st.write(f"AI Probability: {percent}%")
+            st.markdown("## Result")
 
-        # Debug (remove later)
-        st.write(f"Gemini Score: {round(gemini_score*100)}%")
-        st.write(f"Metadata Score: {round(metadata_score*100)}%")
-        st.write(f"Forensics Score: {round(forensics_score*100)}%")
+            st.progress(score)
 
-        # Classification
-        if final_score > 0.75:
-            label = "AI Generated"
-            st.error("🚨 AI GENERATED IMAGE")
-        elif final_score < 0.4:
-            label = "Likely Real"
-            st.success("✅ LIKELY REAL IMAGE")
-        else:
-            label = "Suspicious"
-            st.warning("⚠️ SUSPICIOUS IMAGE")
+            st.markdown(f"### AI Probability: {percent}%")
 
-        # Confidence
-        confidence = abs(final_score - 0.5) * 2
-        if confidence > 0.7:
-            conf_label = "High"
-        elif confidence > 0.3:
-            conf_label = "Medium"
-        else:
-            conf_label = "Low"
+            # Classification
+            if score > 0.75:
+                label = "AI Generated"
+                st.error("🚨 AI GENERATED IMAGE")
+            elif score < 0.4:
+                label = "Likely Real"
+                st.success("✅ LIKELY REAL IMAGE")
+            else:
+                label = "Suspicious"
+                st.warning("⚠️ SUSPICIOUS IMAGE")
 
-        st.write(f"Confidence: {conf_label}")
+            # Confidence
+            confidence = abs(score - 0.5) * 2
 
-        # Save history
-        st.session_state.history.append({
-            "Time": datetime.now().strftime("%H:%M:%S"),
-            "File": uploaded_file.name,
-            "Result": label
-        })
+            if confidence > 0.7:
+                conf_label = "High"
+            elif confidence > 0.3:
+                conf_label = "Medium"
+            else:
+                conf_label = "Low"
+
+            st.markdown(f"**Confidence:** {conf_label}")
+
+            st.markdown("---")
+            st.caption("Analysis based on AI model, metadata, image structure, and filename patterns.")
 
 
 # ------------------- HISTORY -------------------
+if "history" not in st.session_state:
+    st.session_state.history = []
+
+if uploaded_file and score is not None:
+    st.session_state.history.append({
+        "Time": datetime.now().strftime("%H:%M:%S"),
+        "File": uploaded_file.name,
+        "Result": label
+    })
+
 if st.session_state.history:
-    st.subheader("Detection History")
+    st.markdown("## Detection History")
     df = pd.DataFrame(st.session_state.history)
-    st.dataframe(df)
+    st.dataframe(df, use_container_width=True)
 
     csv = df.to_csv(index=False)
-    st.download_button("Download CSV", csv, "report.csv")
+    st.download_button("Download CSV Report", csv, "report.csv")
