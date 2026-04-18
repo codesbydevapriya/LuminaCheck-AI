@@ -6,6 +6,7 @@ from datetime import datetime
 import google.generativeai as genai
 import re
 import time
+import numpy as np
 
 # 🔐 Load API Key
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
@@ -38,6 +39,25 @@ def analyze_metadata(image):
             return 0.2
 
         return 0.4
+
+    except:
+        return 0.5
+
+
+# ------------------- FORENSICS ANALYSIS -------------------
+def analyze_forensics(image):
+    try:
+        gray = image.convert("L")
+        arr = np.array(gray)
+
+        variance = arr.var()
+
+        if variance < 300:
+            return 0.7   # too smooth → AI-like
+        elif variance > 1500:
+            return 0.3   # natural noise → real
+        else:
+            return 0.5   # uncertain
 
     except:
         return 0.5
@@ -86,19 +106,24 @@ def detect(image):
 
     gemini_score = detect_with_gemini(image)
     metadata_score = analyze_metadata(image)
+    forensics_score = analyze_forensics(image)
 
     if gemini_score is None:
         return None
 
     # 🔥 Weighted combination
-    final_score = (0.6 * gemini_score) + (0.2 * metadata_score)
+    final_score = (
+        (0.6 * gemini_score) +
+        (0.2 * metadata_score) +
+        (0.15 * forensics_score)
+    )
 
-    return final_score, gemini_score, metadata_score
+    return final_score, gemini_score, metadata_score, forensics_score
 
 
 # ------------------- UI -------------------
 st.title("🔍 LuminaCheck AI")
-st.caption("Hybrid AI Detection (Gemini + Metadata)")
+st.caption("Hybrid AI Detection (Gemini + Metadata + Forensics)")
 
 if "history" not in st.session_state:
     st.session_state.history = []
@@ -117,7 +142,7 @@ if uploaded_file:
             st.warning("Detection failed. Try again.")
             st.stop()
 
-        final_score, gemini_score, metadata_score = result
+        final_score, gemini_score, metadata_score, forensics_score = result
 
         percent = round(final_score * 100)
 
@@ -126,9 +151,10 @@ if uploaded_file:
 
         st.write(f"AI Probability: {percent}%")
 
-        # Debug (you can remove later)
+        # Debug (remove later)
         st.write(f"Gemini Score: {round(gemini_score*100)}%")
         st.write(f"Metadata Score: {round(metadata_score*100)}%")
+        st.write(f"Forensics Score: {round(forensics_score*100)}%")
 
         # Classification
         if final_score > 0.75:
