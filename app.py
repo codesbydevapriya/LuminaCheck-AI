@@ -83,9 +83,61 @@ def detect_with_gemini(image):
         model = genai.GenerativeModel("gemini-2.5-flash")
 
         prompt = """
-        Analyze this image.
-        Estimate how likely it is AI-generated.
-        Respond ONLY with a number between 0 and 100.
+        You are an expert forensic image analyst specializing in detecting AI-generated images. 
+You will analyze the uploaded image with extreme precision across every possible dimension.
+
+Examine ALL of the following aspects thoroughly before reaching a conclusion:
+
+TEXTURE & SURFACE ANALYSIS:
+- Skin pores, hair strands, fabric weave — are they consistent and physically plausible?
+- Do surfaces have realistic imperfections, wear, and variation?
+- Are textures too smooth, repetitive, or unnaturally perfect?
+
+GEOMETRIC & STRUCTURAL INTEGRITY:
+- Count fingers, teeth, ears, eyes — are quantities and symmetry correct?
+- Do hands, feet, and limbs follow correct anatomical proportions?
+- Are straight lines truly straight (walls, floors, furniture edges)?
+- Do glasses, jewelry, and accessories have consistent shape across the full object?
+
+LIGHTING & SHADOW CONSISTENCY:
+- Is there a single coherent light source, or do shadows contradict each other?
+- Do reflections in eyes, glasses, and shiny surfaces match the environment?
+- Is subsurface scattering on skin physically realistic?
+
+BACKGROUND & ENVIRONMENT:
+- Is background text legible and correctly spelled?
+- Do background objects maintain consistent perspective and scale?
+- Are there repeated or mirrored elements in the background?
+- Do edges between subject and background show blending artifacts or halos?
+
+FINE DETAIL EXAMINATION:
+- Zoom into ears — are the folds anatomically correct?
+- Examine hairline edges — are individual strands distinguishable or merged into blobs?
+- Check jewelry, buttons, zippers — are they symmetrical and physically coherent?
+- Look at eyes closely — are catchlights, pupils, irises, and veins realistic?
+
+AI ARTIFACT DETECTION:
+- Are there any areas of unusual smoothness surrounded by detail?
+- Do facial features drift or look slightly "melted"?
+- Is there inconsistent resolution — some areas sharp, others inexplicably soft?
+- Are patterns (tiles, fabric, wallpaper) coherent or do they break down on inspection?
+
+METADATA INDICATORS (visual):
+- Does the overall aesthetic feel "too perfect" with no motion blur, lens distortion, or chromatic aberration?
+- Is the depth of field physically consistent with the apparent focal length?
+- Are there any watermarks, signatures, or generation artifacts visible?
+
+CROSS-CHECK:
+After examining every aspect above, weigh the evidence. Consider that:
+- A single major anomaly (e.g., 6 fingers, impossible shadow) is strong evidence of AI generation.
+- Multiple minor anomalies compound into high confidence.
+- Photorealistic images can still be AI-generated — absence of obvious flaws does not mean real.
+
+OUTPUT INSTRUCTION:
+Respond with ONLY a single integer between 0 and 100.
+0 = Certainly real photograph.
+100 = Certainly AI-generated.
+No explanation. No text. No punctuation. Just the number.
         """
 
         for _ in range(3):
