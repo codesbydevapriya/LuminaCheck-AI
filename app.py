@@ -115,77 +115,39 @@ def detect_with_gemini(image):
 # ------------------- OPENROUTER REASON -------------------
 def get_reason(image):
     try:
-        if not OPENROUTER_API_KEY:
-            return "OpenRouter API key missing"
-
-        buffered = BytesIO()
-        image.save(buffered, format="JPEG")
-        img_base64 = base64.b64encode(buffered.getvalue()).decode()
+        genai.configure(api_key=GEMINI_API_KEY)
+        model = genai.GenerativeModel("gemini-2.5-flash")
 
         prompt = """
 Analyze this image and explain why it might be AI-generated or real.
 
 Give 3 to 5 short bullet points.
+
+Focus on:
+- texture realism
+- lighting consistency
+- face/body structure
+- background coherence
+- unnatural smoothness
+
+Keep it short.
 """
 
-        # 🔥 TRY IMAGE MODEL FIRST (paid but cheap)
-        response = requests.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                "Content-Type": "application/json"
-            },
-            json={
-                "model": "openai/gpt-4o-mini",
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": prompt},
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/jpeg;base64,{img_base64}"
-                                }
-                            }
-                        ]
-                    }
-                ]
-            }
-        )
+        for _ in range(2):
+            try:
+                response = model.generate_content([prompt, image])
 
-        data = response.json()
+                if response and response.text:
+                    return response.text.strip()
 
-        if "choices" in data:
-            return data["choices"][0]["message"]["content"]
+            except Exception as e:
+                if "429" in str(e):
+                    time.sleep(3)
 
-        # 🔥 FALLBACK → FREE MODEL (no image, still useful)
-        fallback = requests.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                "Content-Type": "application/json"
-            },
-            json={
-                "model": "deepseek/deepseek-chat",
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": "Explain common signs of AI-generated images in simple bullet points."
-                    }
-                ]
-            }
-        )
-
-        data2 = fallback.json()
-
-        if "choices" in data2:
-            return "General analysis:\n" + data2["choices"][0]["message"]["content"]
-
-        return f"API issue: {data}"
+        return "Low confidence explanation"
 
     except Exception as e:
-        return f"Reason error: {e}"
+        return f"Reason error: {e}""
 
 
 # ------------------- FINAL DETECTION -------------------
