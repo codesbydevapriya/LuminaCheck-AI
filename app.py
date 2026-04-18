@@ -147,7 +147,7 @@ Keep it short.
         return "Low confidence explanation"
 
     except Exception as e:
-        return f"Reason error: {e}""
+        return f"Reason error: {e}"
 
 
 # ------------------- FINAL DETECTION -------------------
