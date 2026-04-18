@@ -405,7 +405,7 @@ if uploaded_file:
                 })
 
 # ─── RESULT PANEL ──────────────────────────────────────────────────────────────
-if st.session_state.last_result:
+if st.session_state.last_result and isinstance(st.session_state.last_result, dict):
     result = st.session_state.last_result
     label  = st.session_state.last_label
     score  = result["score"]
