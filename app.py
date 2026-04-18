@@ -183,12 +183,25 @@ Do not give probability.
 Keep it short.
 """
 
-        response = model.generate_content([prompt, image])
-        return response.text
+        for _ in range(2):
+            try:
+                response = model.generate_content([prompt, image])
 
-    except:
-        return "Reason unavailable"
+                if response and response.text:
+                    return response.text.strip()
 
+            except Exception as e:
+                if "429" in str(e):
+                    st.warning("Rate limit hit. Retrying...")
+                    time.sleep(3)
+                else:
+                    st.warning(f"Reason error: {e}")
+
+        # 🔥 fallback (but better than empty)
+        return "Low confidence analysis. Unable to extract clear reasoning."
+
+    except Exception as e:
+        return f"Reason failed: {e}"
 
 # ------------------- FINAL DETECTION -------------------
 def detect(image, filename):
