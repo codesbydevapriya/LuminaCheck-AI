@@ -8,12 +8,11 @@ import re
 import time
 import numpy as np
 import requests
-import base64
 from io import BytesIO
 
 # 🔐 API Keys
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
+HUGGINGFACE_API_KEY = os.environ.get("HUGGINGFACE_API_KEY")
 
 st.set_page_config(page_title="LuminaCheck AI", layout="wide")
 
@@ -90,21 +89,13 @@ def detect_with_gemini(image):
         genai.configure(api_key=GEMINI_API_KEY)
         model = genai.GenerativeModel("gemini-2.5-flash")
 
-        prompt = """YOUR SAME FORENSIC PROMPT"""
+        prompt = """Return a number between 0 and 100 indicating likelihood of AI generation."""
 
-        for _ in range(3):
-            try:
-                response = model.generate_content([prompt, image])
-                text = str(response.text).strip()
+        response = model.generate_content([prompt, image])
+        match = re.search(r"\d+", str(response.text))
 
-                match = re.search(r"\d+", text)
-                if match:
-                    score = float(match.group()) / 100
-                    return max(0.0, min(1.0, score))
-
-            except Exception as e:
-                if "429" in str(e):
-                    time.sleep(5)
+        if match:
+            return float(match.group()) / 100
 
         return 0.5
 
@@ -112,37 +103,20 @@ def detect_with_gemini(image):
         return 0.5
 
 
-# ------------------- OPENROUTER REASON -------------------
+# ------------------- GEMINI REASON -------------------
 def get_reason(image):
     try:
         genai.configure(api_key=GEMINI_API_KEY)
         model = genai.GenerativeModel("gemini-2.5-flash")
 
         prompt = """
-Analyze this image and explain why it might be AI-generated or real.
-
-Give 3 to 5 short bullet points.
-
-Focus on:
-- texture realism
-- lighting consistency
-- face/body structure
-- background coherence
-- unnatural smoothness
-
-Keep it short.
+Give 3 short reasons why this image might be AI-generated or real.
 """
 
-        for _ in range(2):
-            try:
-                response = model.generate_content([prompt, image])
+        response = model.generate_content([prompt, image])
 
-                if response and response.text:
-                    return response.text.strip()
-
-            except Exception as e:
-                if "429" in str(e):
-                    time.sleep(3)
+        if response and response.text:
+            return response.text.strip()
 
         return "Low confidence explanation"
 
@@ -157,26 +131,12 @@ def detect(image, filename):
     forensics_score = analyze_forensics(image)
     filename_score = analyze_filename(filename)
 
-    gemini_score = max(0.1, min(0.9, gemini_score))
-
     base_score = (
         (0.7 * gemini_score) +
         (0.15 * metadata_score) +
         (0.1 * forensics_score) +
         (0.05 * filename_score)
     )
-
-    scores = [gemini_score, metadata_score, forensics_score]
-    disagreement = max(scores) - min(scores)
-
-    if disagreement > 0.5:
-        base_score = (base_score * 0.7) + (0.5 * 0.3)
-
-    if disagreement > 0.7:
-        base_score = 0.5
-
-    if 0.4 < base_score < 0.6:
-        base_score = 0.5
 
     return base_score
 
@@ -187,28 +147,32 @@ st.caption("Hybrid AI Detection System")
 
 uploaded_file = st.file_uploader("Upload Image", type=["jpg", "jpeg", "png"])
 
-# 🔥 ADD THIS HERE
-if st.button("🧪 Test HuggingFace Connection"):
-    import requests
-    from io import BytesIO
-    from PIL import Image
 
-    api_key = os.environ.get("HUGGINGFACE_API_KEY")
+# ✅ HuggingFace Test Button (FIXED)
+if st.button("🧪 Test HuggingFace Connection"):
+    api_key = HUGGINGFACE_API_KEY
 
     if not api_key:
         st.error("HF key missing")
     else:
         try:
-            headers = {
-                "Authorization": f"Bearer {api_key}"
-            }
+            headers = {"Authorization": f"Bearer {api_key}"}
 
-            url = "https://upload.wikimedia.org/wikipedia/commons/3/3f/Fronalpstock_big.jpg"
-            response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
+            img_url = "https://upload.wikimedia.org/wikipedia/commons/3/3f/Fronalpstock_big.jpg"
+            img_bytes = requests.get(img_url, headers={"User-Agent": "Mozilla/5.0"}).content
 
-            if response.status_code != 200:
-                st.error("Image
+            API_URL = "https://api-inference.huggingface.co/models/google/vit-base-patch16-224"
 
+            res = requests.post(API_URL, headers=headers, data=img_bytes)
+
+            st.write("Status:", res.status_code)
+            st.write("Response:", res.text[:300])
+
+        except Exception as e:
+            st.error(f"HF test failed: {e}")
+
+
+# ------------------- IMAGE ANALYSIS -------------------
 if uploaded_file:
     image = Image.open(uploaded_file).convert("RGB")
 
@@ -254,13 +218,7 @@ if uploaded_file:
             st.warning("⚠️ SUSPICIOUS IMAGE")
 
         confidence = abs(score - 0.5) * 2
-
-        if confidence > 0.7:
-            conf_label = "High"
-        elif confidence > 0.3:
-            conf_label = "Medium"
-        else:
-            conf_label = "Low"
+        conf_label = "High" if confidence > 0.7 else "Medium" if confidence > 0.3 else "Low"
 
         st.markdown(f"**Confidence:** {conf_label}")
 
