@@ -118,7 +118,6 @@ def get_reason(image):
         if not OPENROUTER_API_KEY:
             return "OpenRouter API key missing"
 
-        # convert image to base64
         buffered = BytesIO()
         image.save(buffered, format="JPEG")
         img_base64 = base64.b64encode(buffered.getvalue()).decode()
@@ -127,17 +126,9 @@ def get_reason(image):
 Analyze this image and explain why it might be AI-generated or real.
 
 Give 3 to 5 short bullet points.
-
-Focus on:
-- texture realism
-- lighting consistency
-- face/body structure
-- background coherence
-- unnatural smoothness
-
-Keep it short.
 """
 
+        # 🔥 TRY IMAGE MODEL FIRST (paid but cheap)
         response = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers={
@@ -165,7 +156,33 @@ Keep it short.
 
         data = response.json()
 
-        return data["choices"][0]["message"]["content"]
+        if "choices" in data:
+            return data["choices"][0]["message"]["content"]
+
+        # 🔥 FALLBACK → FREE MODEL (no image, still useful)
+        fallback = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": "deepseek/deepseek-chat",
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": "Explain common signs of AI-generated images in simple bullet points."
+                    }
+                ]
+            }
+        )
+
+        data2 = fallback.json()
+
+        if "choices" in data2:
+            return "General analysis:\n" + data2["choices"][0]["message"]["content"]
+
+        return f"API issue: {data}"
 
     except Exception as e:
         return f"Reason error: {e}"
