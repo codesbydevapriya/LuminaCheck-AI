@@ -1,56 +1,67 @@
 import os
 import streamlit as st
 from PIL import Image
-import replicate
 import pandas as pd
 from datetime import datetime
-import tempfile
+import google.generativeai as genai
+import re
+import time
 
-If GEMINI_API_KEY exists → show "Key Loaded"
-Else → show "Key Missing"
+# 🔐 Load API Key
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
-# 🔐 Token
-os.environ["GEMINI_API_KEY"] = os.environ.get("GEMINI_API_KEY")
+# ✅ Debug check (temporary)
+if GEMINI_API_KEY:
+    st.success("✅ Gemini API Key Loaded")
+else:
+    st.error("❌ Gemini API Key Missing")
 
 st.set_page_config(page_title="LuminaCheck AI", layout="wide")
 
-# ------------------- DETECTION -------------------
+# ------------------- GEMINI DETECTION -------------------
 def detect(image):
+    if not GEMINI_API_KEY:
+        return None, None
+
     try:
-        # Save temp image
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
-            image.save(tmp.name)
-            image_path = tmp.name
+        genai.configure(api_key=GEMINI_API_KEY)
+        model = genai.GenerativeModel("gemini-2.5-flash")
 
-        # ✅ Use a working public model (image classifier style)
-        output = replicate.run(
-            "methexis-inc/img2prompt",
-            input={"image": open(image_path, "rb")}
-        )
+        prompt = """
+        Analyze this image.
 
-        text = str(output).lower()
+        Estimate how likely it is AI-generated.
 
-        # 🔥 smarter scoring
-        score = 0.5
+        Respond ONLY with a number between 0 and 100.
+        """
 
-        if any(word in text for word in ["render", "3d", "illustration", "digital"]):
-            score += 0.3
+        # Retry logic
+        for _ in range(3):
+            try:
+                response = model.generate_content([prompt, image])
+                text = response.text
 
-        if any(word in text for word in ["photo", "camera", "lens", "realistic"]):
-            score -= 0.2
+                match = re.search(r"\d+", text)
+                if match:
+                    score = float(match.group()) / 100
+                    return score, 1 - score
 
-        score = max(0, min(1, score))
-
-        return score, 1 - score
+            except Exception as e:
+                if "429" in str(e):
+                    st.warning("Rate limit hit, retrying...")
+                    time.sleep(5)
+                else:
+                    break
 
     except Exception as e:
-        st.error(f"Detection failed: {e}")
-        return None, None
+        st.error(f"Error: {e}")
+
+    return None, None
 
 
 # ------------------- UI -------------------
 st.title("🔍 LuminaCheck AI")
-st.caption("AI Image Detection (Hybrid AI Analysis)")
+st.caption("AI Image Detection using Gemini")
 
 if "history" not in st.session_state:
     st.session_state.history = []
@@ -66,6 +77,7 @@ if uploaded_file:
         ai, real = detect(image)
 
         if ai is None:
+            st.warning("Detection failed. Try again.")
             st.stop()
 
         ai_percent = round(ai * 100)
@@ -75,18 +87,16 @@ if uploaded_file:
 
         st.write(f"AI Probability: {ai_percent}%")
 
-        # ✅ Safe classification (no embarrassment)
-        if ai > 0.75:
+        # Classification
+        if ai > 0.7:
             result = "Likely AI Generated"
             st.error("🚨 Likely AI Generated")
-        elif ai < 0.25:
+        elif ai < 0.3:
             result = "Likely Real"
             st.success("✅ Likely Real Image")
         else:
             result = "Uncertain"
             st.warning("⚠️ Unable to confidently classify")
-
-        st.info("This system uses AI-assisted analysis. Results are probabilistic.")
 
         # Save history
         st.session_state.history.append({
