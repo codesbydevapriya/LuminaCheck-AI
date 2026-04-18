@@ -23,6 +23,9 @@ if "last_result" not in st.session_state:
 if "last_label" not in st.session_state:
     st.session_state.last_label = None
 
+if "last_reason" not in st.session_state:
+    st.session_state.last_reason = None
+
 
 # ------------------- METADATA -------------------
 def analyze_metadata(image):
@@ -77,7 +80,7 @@ def analyze_filename(filename):
     return 0.4
 
 
-# ------------------- GEMINI -------------------
+# ------------------- GEMINI SCORE -------------------
 def detect_with_gemini(image):
     try:
         genai.configure(api_key=GEMINI_API_KEY)
@@ -151,14 +154,40 @@ No explanation. No text. No punctuation. Just the number.
             except Exception as e:
                 if "429" in str(e):
                     time.sleep(5)
-                else:
-                    st.warning(f"Gemini issue: {e}")
 
         return 0.5
 
-    except Exception as e:
-        st.warning(f"Gemini failed: {e}")
+    except:
         return 0.5
+
+
+# ------------------- GEMINI REASON -------------------
+def get_reason(image):
+    try:
+        genai.configure(api_key=GEMINI_API_KEY)
+        model = genai.GenerativeModel("gemini-2.5-flash")
+
+        prompt = """
+Analyze this image and explain why it might be AI-generated or real.
+
+Give 3 to 5 short bullet points.
+
+Focus on:
+- texture realism
+- lighting consistency
+- face/body structure
+- background coherence
+- unnatural smoothness
+
+Do not give probability.
+Keep it short.
+"""
+
+        response = model.generate_content([prompt, image])
+        return response.text
+
+    except:
+        return "Reason unavailable"
 
 
 # ------------------- FINAL DETECTION -------------------
@@ -210,8 +239,10 @@ if uploaded_file:
         if st.button("Analyze Image"):
 
             score = detect(image, uploaded_file.name)
+            reason = get_reason(image)
 
             st.session_state.last_result = score
+            st.session_state.last_reason = reason
 
             if score > 0.8:
                 label = "AI Generated"
@@ -225,6 +256,7 @@ if uploaded_file:
     if st.session_state.last_result is not None:
         score = st.session_state.last_result
         label = st.session_state.last_label
+        reason = st.session_state.last_reason
 
         percent = round(score * 100)
 
@@ -249,6 +281,11 @@ if uploaded_file:
             conf_label = "Low"
 
         st.markdown(f"**Confidence:** {conf_label}")
+
+        # 🔥 NEW SECTION
+        if reason:
+            st.markdown("### 🔍 Why this result?")
+            st.write(reason)
 
         st.session_state.history.append({
             "Time": datetime.now().strftime("%H:%M:%S"),
