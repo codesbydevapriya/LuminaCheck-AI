@@ -22,7 +22,6 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# Hide all default Streamlit chrome
 st.markdown("""
 <style>
 #MainMenu, header, footer, .stDeployButton { display: none !important; }
@@ -32,7 +31,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ─── SESSION STATE ──────────────────────────────────────────────────────────────
 for key, default in {
     "history": [],
     "last_result": None,
@@ -41,9 +39,6 @@ for key, default in {
         st.session_state[key] = default
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  SIGNAL 1 — METADATA
-# ══════════════════════════════════════════════════════════════════════════════
 def analyze_metadata(image: Image.Image) -> tuple:
     try:
         exif = image.getexif()
@@ -66,9 +61,6 @@ def analyze_metadata(image: Image.Image) -> tuple:
         return 0.45, "EXIF read error"
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  SIGNAL 2 — FORENSICS
-# ══════════════════════════════════════════════════════════════════════════════
 def analyze_forensics(image: Image.Image) -> tuple:
     try:
         img_resized = image.resize((256, 256))
@@ -97,9 +89,6 @@ def analyze_forensics(image: Image.Image) -> tuple:
         return 0.45, "Forensics error"
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  SIGNAL 3 — FILENAME
-# ══════════════════════════════════════════════════════════════════════════════
 def analyze_filename(filename: str) -> tuple:
     name = filename.lower()
     ai_patterns = ["ai", "dalle", "midjourney", "generated", "flux",
@@ -113,9 +102,6 @@ def analyze_filename(filename: str) -> tuple:
     return 0.40, "Neutral filename"
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  SIGNAL 4 — GEMINI
-# ══════════════════════════════════════════════════════════════════════════════
 def resize_for_gemini(image: Image.Image, max_px: int = 768) -> Image.Image:
     w, h = image.size
     if max(w, h) <= max_px:
@@ -174,9 +160,6 @@ Where 0 = definitely real photo, 100 = definitely AI generated."""
         return 0.5, "Gemini error."
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  FUSION ENGINE
-# ══════════════════════════════════════════════════════════════════════════════
 def detect(image: Image.Image, filename: str) -> dict:
     gemini_score, gemini_reason   = detect_with_gemini(image)
     meta_score,   meta_note       = analyze_metadata(image)
@@ -226,9 +209,6 @@ def confidence_label(score: float) -> str:
     else:              return "Low Confidence"
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  FILE UPLOAD + DETECTION (hidden Streamlit uploader)
-# ══════════════════════════════════════════════════════════════════════════════
 uploaded_file = st.file_uploader(
     "upload", type=["jpg", "jpeg", "png", "webp"],
     label_visibility="collapsed", key="img_upload"
@@ -277,9 +257,6 @@ if uploaded_file is not None:
     })
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  HTML INTERFACE
-# ══════════════════════════════════════════════════════════════════════════════
 HTML = """
 <!DOCTYPE html>
 <html>
@@ -314,6 +291,101 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
 .drop-title{font-size:1rem;font-weight:500;margin-bottom:0.3rem}
 .drop-sub{font-size:0.78rem;color:var(--muted)}
 
+/* ── UPLOAD PROGRESS ── */
+.upload-progress-wrap{
+  display:none;border-radius:18px;border:1px solid var(--border);
+  background:var(--surface);padding:2.5rem 2rem;text-align:center;
+}
+.upload-progress-wrap.active{display:block}
+.up-icon{width:52px;height:52px;margin:0 auto 1rem;position:relative}
+.up-icon svg{width:52px;height:52px}
+.up-arrow-anim{animation:upFloat 0.9s ease-in-out infinite}
+@keyframes upFloat{
+  0%{transform:translateY(4px);opacity:0.4}
+  50%{transform:translateY(-4px);opacity:1}
+  100%{transform:translateY(4px);opacity:0.4}
+}
+.up-title{font-size:0.95rem;font-weight:500;margin-bottom:0.25rem;color:var(--text)}
+.up-sub{font-size:0.75rem;color:var(--muted);font-family:'DM Mono',monospace;margin-bottom:1.4rem}
+.up-bar-wrap{height:4px;background:var(--surface2);border-radius:2px;overflow:hidden;position:relative;margin:0 auto;max-width:340px}
+.up-bar-shimmer{
+  position:absolute;inset:0;
+  background:linear-gradient(90deg,transparent 0%,var(--accent) 40%,var(--accent2) 60%,transparent 100%);
+  background-size:200% 100%;
+  animation:shimmer 1.4s linear infinite;
+  border-radius:2px;
+}
+@keyframes shimmer{
+  0%{background-position:200% center}
+  100%{background-position:-200% center}
+}
+.up-bar-fill{
+  height:100%;border-radius:2px;
+  background:linear-gradient(90deg,var(--accent),var(--accent2));
+  transition:width 0.35s ease;width:0%;
+}
+.up-pct{font-size:0.7rem;color:var(--muted);font-family:'DM Mono',monospace;margin-top:0.5rem}
+
+/* ── ANALYSIS SCREEN ── */
+.analysis-wrap{
+  display:none;border-radius:18px;border:1px solid var(--border);
+  background:var(--surface);padding:2rem 2rem;text-align:center;
+}
+.analysis-wrap.active{display:block}
+
+.scan-orb{position:relative;width:110px;height:110px;margin:0 auto 1.5rem}
+.orb-ring{
+  position:absolute;inset:0;border-radius:50%;
+  border:1px solid var(--accent);opacity:0;
+  animation:orbPulse 2s ease-out infinite;
+}
+.orb-ring:nth-child(2){animation-delay:0.7s;border-color:var(--accent2)}
+.orb-ring:nth-child(3){animation-delay:1.4s;border-color:var(--accent)}
+@keyframes orbPulse{
+  0%{transform:scale(0.6);opacity:0.8}
+  100%{transform:scale(1.6);opacity:0}
+}
+.orb-core{
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  width:52px;height:52px;border-radius:50%;
+  background:radial-gradient(circle at 35% 35%,#2a2040,#13131a);
+  border:1px solid var(--accent2);
+  display:flex;align-items:center;justify-content:center;
+}
+.orb-core svg{width:24px;height:24px;animation:rotateSlow 4s linear infinite}
+@keyframes rotateSlow{to{transform:rotate(360deg)}}
+
+.scan-line-box{
+  position:relative;width:100%;max-width:380px;height:3px;
+  margin:0 auto 1.8rem;background:var(--surface2);border-radius:2px;overflow:hidden;
+}
+.scan-line{
+  position:absolute;height:100%;width:40%;border-radius:2px;
+  background:linear-gradient(90deg,transparent,var(--accent),var(--accent2),transparent);
+  animation:scanSlide 1.8s ease-in-out infinite;
+}
+@keyframes scanSlide{
+  0%{left:-40%}100%{left:140%}
+}
+
+.analysis-title{font-size:1rem;font-weight:500;margin-bottom:0.3rem;color:var(--text)}
+.analysis-sub{font-size:0.74rem;color:var(--muted);font-family:'DM Mono',monospace;margin-bottom:1.6rem;min-height:1.4em;transition:opacity 0.4s}
+
+.steps-list{list-style:none;text-align:left;max-width:320px;margin:0 auto;display:flex;flex-direction:column;gap:0.55rem}
+.step-item{
+  display:flex;align-items:center;gap:0.75rem;
+  font-size:0.8rem;font-family:'DM Mono',monospace;color:var(--muted);
+  padding:0.45rem 0.75rem;border-radius:8px;
+  transition:all 0.4s ease;
+}
+.step-item.done{color:var(--real)}
+.step-item.active{color:var(--accent);background:rgba(200,169,110,0.08);border:1px solid rgba(200,169,110,0.18)}
+.step-item.pending{color:var(--muted)}
+.step-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;background:currentColor}
+.step-item.active .step-dot{animation:dotPulse 0.8s ease-in-out infinite}
+@keyframes dotPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.4;transform:scale(0.6)}}
+.step-check{font-size:0.85rem;flex-shrink:0}
+
 .main-grid{display:none;grid-template-columns:1fr 1.35fr;gap:1.5rem;margin-top:1.5rem;align-items:start}
 .img-frame{border-radius:14px;overflow:hidden;border:1px solid var(--border);background:var(--surface)}
 .img-frame img{width:100%;max-height:260px;object-fit:cover;display:block}
@@ -327,11 +399,6 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
   cursor:pointer;letter-spacing:0.04em;transition:opacity 0.2s;display:none;
 }
 .scan-btn:hover{opacity:0.87}
-
-.spinner-wrap{display:none;text-align:center;padding:2.5rem 0}
-.spin-ring{width:38px;height:38px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.75s linear infinite;margin:0 auto 0.8rem}
-@keyframes spin{to{transform:rotate(360deg)}}
-.spin-text{font-size:0.76rem;color:var(--muted);font-family:'DM Mono',monospace}
 
 .result-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.6rem;display:none}
 
@@ -391,6 +458,7 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
     <div class="tagline">Forensic Image Authentication &nbsp;·&nbsp; Gemini 2.5 Flash + Hybrid Signals</div>
   </div>
 
+  <!-- DROP ZONE -->
   <div class="drop-zone" id="dropZone" onclick="triggerUpload()">
     <div class="drop-icon">
       <svg viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -404,6 +472,63 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
     <div class="drop-sub">or click to browse &nbsp;·&nbsp; JPG &nbsp;PNG &nbsp;WEBP</div>
   </div>
 
+  <!-- UPLOAD PROGRESS -->
+  <div class="upload-progress-wrap" id="uploadProgressWrap">
+    <div class="up-icon">
+      <svg viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="4" y="14" width="44" height="32" rx="5" stroke="#c8a96e" stroke-width="1.4"/>
+        <path class="up-arrow-anim" d="M26 28V8M20 14l6-6 6 6" stroke="#c8a96e" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <div class="up-title">Uploading image…</div>
+    <div class="up-sub" id="upSubText">Reading file data</div>
+    <div class="up-bar-wrap">
+      <div class="up-bar-shimmer"></div>
+      <div class="up-bar-fill" id="upBarFill"></div>
+    </div>
+    <div class="up-pct" id="upPct">0%</div>
+  </div>
+
+  <!-- ANALYSIS WAITING SCREEN -->
+  <div class="analysis-wrap" id="analysisWrap">
+    <div class="scan-orb">
+      <div class="orb-ring"></div>
+      <div class="orb-ring"></div>
+      <div class="orb-ring"></div>
+      <div class="orb-core">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="12" cy="12" r="9" stroke="#c8a96e" stroke-width="1.2" stroke-dasharray="3 3"/>
+          <circle cx="12" cy="12" r="4" stroke="#7e6baa" stroke-width="1.2"/>
+          <circle cx="12" cy="12" r="1.5" fill="#c8a96e"/>
+        </svg>
+      </div>
+    </div>
+
+    <div class="scan-line-box"><div class="scan-line"></div></div>
+
+    <div class="analysis-title">Forensic Analysis Running</div>
+    <div class="analysis-sub" id="analysisSub">Initializing multi-signal pipeline…</div>
+
+    <ul class="steps-list" id="stepsList">
+      <li class="step-item pending" id="step0">
+        <span class="step-dot"></span>Pixel forensics scan
+      </li>
+      <li class="step-item pending" id="step1">
+        <span class="step-dot"></span>EXIF metadata extraction
+      </li>
+      <li class="step-item pending" id="step2">
+        <span class="step-dot"></span>Gemini Vision query
+      </li>
+      <li class="step-item pending" id="step3">
+        <span class="step-dot"></span>Channel correlation analysis
+      </li>
+      <li class="step-item pending" id="step4">
+        <span class="step-dot"></span>Fusing detection signals
+      </li>
+    </ul>
+  </div>
+
+  <!-- RESULTS (hidden until done) -->
   <div class="main-grid" id="mainGrid">
     <div>
       <div class="img-frame">
@@ -412,10 +537,6 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
       </div>
     </div>
     <div>
-      <div class="spinner-wrap" id="spinnerWrap">
-        <div class="spin-ring"></div>
-        <div class="spin-text" id="spinText">Initializing forensic scan…</div>
-      </div>
       <div class="result-card" id="resultCard">
         <div class="verdict-row">
           <span class="verdict-badge" id="verdictBadge">—</span>
@@ -474,20 +595,25 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
 const DATA = RESULT_JSON_PLACEHOLDER;
 let historyData = [];
 let techVisible = false;
+let analysisTimer = null;
 
-const spinPhrases = [
-  'Running pixel forensics…',
-  'Querying Gemini Vision…',
-  'Analyzing EXIF metadata…',
-  'Fusing detection signals…',
-  'Computing final verdict…'
+const analysisPhrases = [
+  'Scanning pixel frequency distributions…',
+  'Extracting camera EXIF signatures…',
+  'Querying Gemini 2.5 Flash vision model…',
+  'Analyzing RGB channel correlations…',
+  'Computing weighted signal fusion…',
+  'Cross-referencing forensic patterns…',
+  'Calibrating confidence thresholds…',
+  'Generating final verdict…'
 ];
+
+const stepTimings = [800, 2200, 3800, 6500, 9000];
 
 if (DATA && DATA.score !== undefined) {
   showResult(DATA);
 }
 
-// Drag & drop on the drop zone
 const dropZone = document.getElementById('dropZone');
 dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag'); });
 dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag'));
@@ -505,39 +631,101 @@ function triggerUpload() {
   } catch(e) {}
 }
 
+function showUploadProgress(file) {
+  document.getElementById('dropZone').style.display = 'none';
+  document.getElementById('uploadProgressWrap').classList.add('active');
+  document.getElementById('analysisWrap').classList.remove('active');
+  document.getElementById('mainGrid').style.display = 'none';
+  document.getElementById('scanBtn').style.display = 'none';
+
+  const kb = Math.round(file.size / 1024);
+  document.getElementById('upSubText').textContent = file.name + ' · ' + kb + ' KB';
+
+  let pct = 0;
+  const fill = document.getElementById('upBarFill');
+  const pctEl = document.getElementById('upPct');
+
+  const upInterval = setInterval(() => {
+    pct = Math.min(pct + Math.random() * 18 + 6, 92);
+    fill.style.width = pct + '%';
+    pctEl.textContent = Math.round(pct) + '%';
+    if (pct >= 92) clearInterval(upInterval);
+  }, 150);
+
+  return upInterval;
+}
+
+function showAnalysisScreen() {
+  document.getElementById('uploadProgressWrap').classList.remove('active');
+  document.getElementById('analysisWrap').classList.add('active');
+
+  const steps = document.querySelectorAll('.step-item');
+  steps.forEach(s => { s.className = 'step-item pending'; s.innerHTML = '<span class="step-dot"></span>' + s.textContent.trim(); });
+
+  let phraseIdx = 0;
+  const subEl = document.getElementById('analysisSub');
+  subEl.textContent = analysisPhrases[0];
+
+  const phraseInterval = setInterval(() => {
+    subEl.style.opacity = '0';
+    setTimeout(() => {
+      phraseIdx = (phraseIdx + 1) % analysisPhrases.length;
+      subEl.textContent = analysisPhrases[phraseIdx];
+      subEl.style.opacity = '1';
+    }, 300);
+  }, 2200);
+
+  stepTimings.forEach((delay, i) => {
+    setTimeout(() => {
+      if (i > 0) {
+        const prev = document.getElementById('step' + (i-1));
+        if (prev) {
+          prev.className = 'step-item done';
+          prev.innerHTML = '<span class="step-check">✓</span>' + prev.textContent.trim();
+        }
+      }
+      const cur = document.getElementById('step' + i);
+      if (cur) cur.className = 'step-item active';
+    }, delay);
+  });
+
+  analysisTimer = phraseInterval;
+}
+
 function handleFile(file) {
+  const upInterval = showUploadProgress(file);
+
   const reader = new FileReader();
+  reader.onprogress = e => {
+    if (e.lengthComputable) {
+      const pct = Math.round((e.loaded / e.total) * 100);
+      document.getElementById('upBarFill').style.width = pct + '%';
+      document.getElementById('upPct').textContent = pct + '%';
+    }
+  };
   reader.onload = e => {
+    clearInterval(upInterval);
+    document.getElementById('upBarFill').style.width = '100%';
+    document.getElementById('upPct').textContent = '100%';
+
     document.getElementById('previewImg').src = e.target.result;
     const kb = Math.round(file.size / 1024);
     document.getElementById('imgMeta').textContent =
       file.name + ' · ' + kb + ' KB · ' + file.type.split('/')[1].toUpperCase();
-    showSpinner();
+
+    setTimeout(() => showAnalysisScreen(), 350);
+
+    try {
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      const inputs = window.parent.document.querySelectorAll('input[type=file]');
+      if (inputs.length) {
+        inputs[0].files = dt.files;
+        inputs[0].dispatchEvent(new Event('change', {bubbles: true}));
+      }
+    } catch(e) {}
   };
   reader.readAsDataURL(file);
-  try {
-    const dt = new DataTransfer();
-    dt.items.add(file);
-    const inputs = window.parent.document.querySelectorAll('input[type=file]');
-    if (inputs.length) {
-      inputs[0].files = dt.files;
-      inputs[0].dispatchEvent(new Event('change', {bubbles: true}));
-    }
-  } catch(e) {}
-}
-
-let phraseTimer = null;
-function showSpinner() {
-  document.getElementById('mainGrid').style.display = 'grid';
-  document.getElementById('scanBtn').style.display = 'none';
-  document.getElementById('spinnerWrap').style.display = 'block';
-  document.getElementById('resultCard').style.display = 'none';
-  let i = 0;
-  document.getElementById('spinText').textContent = spinPhrases[0];
-  phraseTimer = setInterval(() => {
-    i = (i + 1) % spinPhrases.length;
-    document.getElementById('spinText').textContent = spinPhrases[i];
-  }, 1800);
 }
 
 function sigColor(s) {
@@ -547,9 +735,12 @@ function sigColor(s) {
 }
 
 function showResult(d) {
-  if (phraseTimer) clearInterval(phraseTimer);
+  if (analysisTimer) clearInterval(analysisTimer);
+
+  document.getElementById('dropZone').style.display = 'none';
+  document.getElementById('uploadProgressWrap').classList.remove('active');
+  document.getElementById('analysisWrap').classList.remove('active');
   document.getElementById('mainGrid').style.display = 'grid';
-  document.getElementById('spinnerWrap').style.display = 'none';
 
   if (d.img_b64) {
     document.getElementById('previewImg').src = 'data:image/jpeg;base64,' + d.img_b64;
