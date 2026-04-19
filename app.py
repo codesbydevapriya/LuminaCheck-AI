@@ -263,7 +263,7 @@ if st.session_state.ui_phase == "uploading":
     })
 elif st.session_state.ui_phase == "analyzing":
     phase_data["progress"] = 0
-elif st.session_state.ui_phase == "results":
+if st.session_state.ui_phase == "results":
     result = st.session_state.last_result
     image = st.session_state.get("last_image")
     if image is None:
@@ -568,39 +568,127 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
       data.filename ? data.filename + (kb ? ' · ' + kb + ' KB' : '') : 'Reading file data';
   }
 
-  else if (phase === 'analyzing') {
+  else if (phase === 'analyzing' || phase === 'results') {
     dropZone.style.display = 'none';
     analysisWrap.classList.add('active');
-    const steps = ['step0','step1','step2','step3'];
-    let cur = 0;
-    const subs = ['Running Gemini vision model…','Scanning EXIF metadata…','Running pixel forensics…','Fusing all signals…'];
-    const subEl = document.getElementById('analysisSub');
-    function advanceStep() {
-      if (cur > 0) {
-        const prev = document.getElementById(steps[cur-1]);
-        prev.className = 'step-item done';
-        prev.innerHTML = '<span class="step-check">✓</span>' + prev.textContent;
-      }
-      if (cur < steps.length) {
-        document.getElementById(steps[cur]).className = 'step-item active';
-        subEl.textContent = subs[cur];
-        cur++;
-        setTimeout(advanceStep, 1800);
+
+    // ── Cinematic 5-step animation (always plays, regardless of phase) ──
+    const TOTAL_MS = 5000;
+    const steps    = ['step0','step1','step2','step3'];
+    const subs     = ['Running Gemini vision model…','Scanning EXIF metadata…','Running pixel forensics…','Fusing all signals…'];
+    const subEl    = document.getElementById('analysisSub');
+
+    // Animated progress bar across full 5 s
+    const progressBar = document.createElement('div');
+    progressBar.style.cssText = 'height:3px;border-radius:2px;background:var(--surface2);overflow:hidden;position:relative;max-width:380px;margin:1.2rem auto 0';
+    const progressFill = document.createElement('div');
+    progressFill.style.cssText = 'height:100%;border-radius:2px;background:linear-gradient(90deg,var(--accent),var(--accent2));width:0%;transition:width 0.25s linear';
+    progressBar.appendChild(progressFill);
+    analysisWrap.appendChild(progressBar);
+
+    // Particle burst overlay
+    const canvas = document.createElement('canvas');
+    canvas.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:10;opacity:0;transition:opacity 0.5s';
+    canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+    document.body.appendChild(canvas);
+    const ctx = canvas.getContext('2d');
+    let particles = [];
+    function spawnParticles() {
+      const cx = canvas.width/2, cy = canvas.height/2;
+      for (let i=0;i<60;i++) {
+        const angle = Math.random()*Math.PI*2;
+        const speed = 2 + Math.random()*5;
+        const colors = ['#c8a96e','#7e6baa','#4ecb8d','#e05c5c','#e8e6f0'];
+        particles.push({ x:cx, y:cy, vx:Math.cos(angle)*speed, vy:Math.sin(angle)*speed,
+          life:1, decay:0.012+Math.random()*0.015, r:2+Math.random()*3,
+          color:colors[Math.floor(Math.random()*colors.length)] });
       }
     }
-    advanceStep();
+    function animParticles() {
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      particles = particles.filter(p=>p.life>0);
+      particles.forEach(p => {
+        p.x+=p.vx; p.y+=p.vy; p.vy+=0.08; p.life-=p.decay;
+        ctx.globalAlpha = p.life;
+        ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+        ctx.fillStyle = p.color; ctx.fill();
+      });
+      if (particles.length) requestAnimationFrame(animParticles);
+      else ctx.clearRect(0,0,canvas.width,canvas.height);
+    }
+
+    // Countdown ticker shown in sub text
+    let cur = 0;
+    const stepInterval = TOTAL_MS / steps.length; // 1250ms each
+
+    function markStep(i, done) {
+      const el = document.getElementById(steps[i]);
+      if (done) {
+        el.className = 'step-item done';
+        el.innerHTML = '<span class="step-check">✓</span>' + el.innerText;
+      } else {
+        el.className = 'step-item active';
+        subEl.textContent = subs[i];
+      }
+    }
+
+    // Tick progress bar every 100ms
+    const startTime = Date.now();
+    const tickInterval = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const pct = Math.min(100, (elapsed / TOTAL_MS) * 100);
+      progressFill.style.width = pct + '%';
+
+      // Advance steps at even intervals
+      const newStep = Math.min(steps.length - 1, Math.floor(elapsed / stepInterval));
+      if (newStep > cur) {
+        markStep(cur, true);
+        cur = newStep;
+        markStep(cur, false);
+      }
+    }, 100);
+
+    markStep(0, false);
+
+    // At 4.2 s — flash particles so they finish by 5 s
+    setTimeout(() => {
+      canvas.style.opacity = '1';
+      spawnParticles(); animParticles();
+    }, 4200);
+
+    // At 5 s — reveal results
+    setTimeout(() => {
+      clearInterval(tickInterval);
+      canvas.style.opacity = '0';
+      // Mark all steps done
+      steps.forEach((_, i) => markStep(i, true));
+      progressFill.style.width = '100%';
+      subEl.textContent = 'Analysis complete ✓';
+
+      // Brief flash then crossfade to results
+      setTimeout(() => {
+        analysisWrap.style.transition = 'opacity 0.6s ease';
+        analysisWrap.style.opacity = '0';
+        setTimeout(() => {
+          analysisWrap.style.display = 'none';
+          showResults();
+        }, 600);
+      }, 350);
+    }, TOTAL_MS);
   }
 
-  else if (phase === 'results') {
-    dropZone.style.display = 'none';
+  function showResults() {
+    if (!data.score && data.score !== 0) return; // no result data yet (pure analyzing phase)
+
     mainGrid.style.display = 'grid';
+    mainGrid.style.opacity = '0';
+    mainGrid.style.transition = 'opacity 0.7s ease';
     resultCard.style.display = 'block';
     scanBtn.style.display = 'block';
 
     const score = data.score;
-    const pct = Math.round(score * 100);
+    const pct   = Math.round(score * 100);
     const label = data.label;
-    const conf = data.conf;
 
     if (data.img_b64) {
       document.getElementById('resultImg').src = 'data:image/jpeg;base64,' + data.img_b64;
@@ -612,39 +700,56 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
     badge.className = 'verdict-badge ' +
       (label === 'AI Generated' ? 'badge-ai' : label === 'Likely Real' ? 'badge-real' : 'badge-sus');
 
-    document.getElementById('confTag').textContent = conf;
-    document.getElementById('probNum').textContent = pct + '%';
+    document.getElementById('confTag').textContent = data.conf;
+    document.getElementById('probNum').textContent = '—%';
 
+    // Fade grid in
+    requestAnimationFrame(() => { mainGrid.style.opacity = '1'; });
+
+    // Animate score counter after fade
     setTimeout(() => {
-      document.getElementById('gaugeFill').style.width = pct + '%';
-    }, 100);
+      let n = 0;
+      const target = pct;
+      const duration = 1200;
+      const step = target / (duration / 16);
+      const el = document.getElementById('probNum');
+      const counter = setInterval(() => {
+        n = Math.min(target, n + step);
+        el.textContent = Math.round(n) + '%';
+        if (n >= target) clearInterval(counter);
+      }, 16);
+    }, 400);
+
+    setTimeout(() => { document.getElementById('gaugeFill').style.width = pct + '%'; }, 500);
 
     const signals = [
-      { name: 'Gemini Vision', score: data.gemini_score },
-      { name: 'EXIF Metadata', score: data.meta_score },
-      { name: 'Pixel Forensics', score: data.forensic_score },
-      { name: 'Filename', score: data.fname_score },
+      { name: 'Gemini Vision',  score: data.gemini_score },
+      { name: 'EXIF Metadata',  score: data.meta_score },
+      { name: 'Pixel Forensics',score: data.forensic_score },
+      { name: 'Filename',       score: data.fname_score },
     ];
     const grid = document.getElementById('signalsGrid');
     grid.innerHTML = signals.map(s => {
-      const sp = Math.round(s.score * 100);
+      const sp  = Math.round(s.score * 100);
       const col = s.score >= 0.65 ? 'var(--ai)' : s.score <= 0.40 ? 'var(--real)' : 'var(--sus)';
       return `<div class="sig-card">
         <div class="sig-name">${s.name}</div>
-        <div class="sig-bar-wrap"><div class="sig-bar-fill" style="width:${sp}%;background:${col}"></div></div>
+        <div class="sig-bar-wrap"><div class="sig-bar-fill" id="sb_${s.name.replace(/ /g,'')}" style="width:0%;background:${col}"></div></div>
         <div class="sig-score" style="color:${col}">${sp}%</div>
       </div>`;
     }).join('');
+    // Animate signal bars staggered
+    signals.forEach((s, i) => {
+      setTimeout(() => {
+        const el = document.getElementById('sb_' + s.name.replace(/ /g,''));
+        if (el) el.style.width = Math.round(s.score * 100) + '%';
+      }, 600 + i * 150);
+    });
 
-    if (data.reason) {
-      document.getElementById('reasonText').textContent = data.reason;
-    }
+    if (data.reason) document.getElementById('reasonText').textContent = data.reason;
 
     document.getElementById('techNotes').innerHTML =
-      `meta: ${data.meta_note}<br>` +
-      `forensics: ${data.forensic_note}<br>` +
-      `filename: ${data.fname_note}<br>` +
-      `signal spread: ${data.spread}`;
+      `meta: ${data.meta_note}<br>forensics: ${data.forensic_note}<br>filename: ${data.fname_note}<br>signal spread: ${data.spread}`;
 
     if (data.history && data.history.length > 0) {
       histDivider.style.display = 'block';
