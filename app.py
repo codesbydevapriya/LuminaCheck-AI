@@ -35,7 +35,7 @@ st.markdown("""
 for key, default in {
     "history": [],
     "last_result": None,
-    "ui_phase": "upload",  # upload, uploading, analyzing, results
+    "ui_phase": "upload",
     "current_filename": None,
     "upload_progress": 0,
     "current_file": None,
@@ -43,7 +43,7 @@ for key, default in {
     if key not in st.session_state:
         st.session_state[key] = default
 
-# ─── YOUR EXISTING FUNCTIONS (unchanged) ───────────────────────────────────────
+# ─── ANALYSIS FUNCTIONS ────────────────────────────────────────────────────────
 def analyze_metadata(image: Image.Image) -> tuple:
     try:
         exif = image.getexif()
@@ -144,8 +144,8 @@ Where 0 = definitely real photo, 100 = definitely AI generated."""
                     )
                 )
                 text = response.text.strip()
-                score_match = re.search(r"SCORE:\\s*(\\d+)", text)
-                reason_match = re.search(r"REASON:\\s*(.+)", text, re.DOTALL)
+                score_match = re.search(r"SCORE:\s*(\d+)", text)
+                reason_match = re.search(r"REASON:\s*(.+)", text, re.DOTALL)
                 if score_match:
                     score = float(score_match.group(1)) / 100
                     score = max(0.0, min(1.0, score))
@@ -212,7 +212,6 @@ uploaded_file = st.file_uploader(
     label_visibility="collapsed", key="img_upload"
 )
 
-# Phase transitions
 if uploaded_file is not None and st.session_state.ui_phase == "upload":
     st.session_state.ui_phase = "uploading"
     st.session_state.current_filename = uploaded_file.name
@@ -221,9 +220,7 @@ if uploaded_file is not None and st.session_state.ui_phase == "upload":
     st.rerun()
 
 if st.session_state.ui_phase == "uploading" and st.session_state.current_file is not None:
-    # Simulate upload progress
     st.session_state.upload_progress = min(95, st.session_state.upload_progress + np.random.randint(8, 15))
-    
     if st.session_state.upload_progress >= 95:
         st.session_state.ui_phase = "analyzing"
         st.rerun()
@@ -232,7 +229,7 @@ if st.session_state.ui_phase == "analyzing" and st.session_state.current_file is
     with st.spinner(""):
         image = Image.open(st.session_state.current_file).convert("RGB")
         result = detect(image, st.session_state.current_filename)
-    
+
     label = classify(result["score"])
     conf = confidence_label(result["score"])
 
@@ -243,8 +240,9 @@ if st.session_state.ui_phase == "analyzing" and st.session_state.current_file is
         "Result": label,
     })
     st.session_state.last_result = result
+    st.session_state.last_image = image  # FIX: store image before clearing file
     st.session_state.ui_phase = "results"
-    st.session_state.current_file = None  # Clear file
+    st.session_state.current_file = None
     st.rerun()
 
 # ─── GENERATE PHASE DATA ────────────────────────────────────────────────────────
@@ -257,16 +255,20 @@ if st.session_state.ui_phase == "uploading":
         "filesize": st.session_state.current_file.size if st.session_state.current_file else 0
     })
 elif st.session_state.ui_phase == "analyzing":
-    phase_data["progress"] = 0  # For analysis steps
+    phase_data["progress"] = 0
 elif st.session_state.ui_phase == "results":
     result = st.session_state.last_result
+    # FIX: use stored image from session state instead of reopening cleared file
+    image = st.session_state.get("last_image")
+    if image is None:
+        image = Image.new("RGB", (100, 100), color=(20, 20, 30))
+
     buf = io.BytesIO()
-    image = Image.open(st.session_state.current_file) if st.session_state.current_file else Image.new('RGB', (100,100))
     thumb = image.copy()
     thumb.thumbnail((640, 640))
     thumb.save(buf, format="JPEG", quality=82)
     img_b64 = base64.b64encode(buf.getvalue()).decode()
-    
+
     phase_data.update({
         "score": result["score"],
         "gemini_score": result["gemini_score"],
@@ -287,7 +289,7 @@ elif st.session_state.ui_phase == "results":
 
 result_json = json.dumps(phase_data)
 
-# ─── HTML TEMPLATE (YOUR ORIGINAL + STATE MACHINE INTEGRATION) ─────────────────
+# ─── HTML TEMPLATE ─────────────────────────────────────────────────────────────
 HTML = """
 <!DOCTYPE html>
 <html>
@@ -296,7 +298,8 @@ HTML = """
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
-*[box-sizing:border-box;margin:0;padding:0]
+/* FIX: corrected CSS selector syntax (was *[box-sizing:...]) */
+*{box-sizing:border-box;margin:0;padding:0}
 :root{
   --bg:#0c0c10;--surface:#13131a;--surface2:#1a1a24;
   --border:#2a2a3a;--accent:#c8a96e;--accent2:#7e6baa;
@@ -318,7 +321,6 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
   transition:all 0.25s ease;background:var(--surface);
 }
 .drop-zone:hover,.drop-zone.drag{border-color:var(--accent);background:var(--surface2)}
-
 .drop-icon{width:56px;height:56px;margin:0 auto 1.1rem;opacity:0.55}
 .drop-title{font-size:1rem;font-weight:500;margin-bottom:0.3rem}
 .drop-sub{font-size:0.78rem;color:var(--muted)}
@@ -347,14 +349,11 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
 .orb-core{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:52px;height:52px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#2a2040,#13131a);border:1px solid var(--accent2);display:flex;align-items:center;justify-content:center;}
 .orb-core svg{width:24px;height:24px;animation:rotateSlow 4s linear infinite}
 @keyframes rotateSlow{to{transform:rotate(360deg)}}
-
 .scan-line-box{position:relative;width:100%;max-width:380px;height:3px;margin:0 auto 1.8rem;background:var(--surface2);border-radius:2px;overflow:hidden;}
 .scan-line{position:absolute;height:100%;width:40%;border-radius:2px;background:linear-gradient(90deg,transparent,var(--accent),var(--accent2),transparent);animation:scanSlide 1.8s ease-in-out infinite;}
 @keyframes scanSlide{0%{left:-40%}100%{left:140%}}
-
 .analysis-title{font-size:1rem;font-weight:500;margin-bottom:0.3rem;color:var(--text)}
 .analysis-sub{font-size:0.74rem;color:var(--muted);font-family:'DM Mono',monospace;margin-bottom:1.6rem;min-height:1.4em;transition:opacity 0.4s}
-
 .steps-list{list-style:none;text-align:left;max-width:320px;margin:0 auto;display:flex;flex-direction:column;gap:0.55rem}
 .step-item{display:flex;align-items:center;gap:0.75rem;font-size:0.8rem;font-family:'DM Mono',monospace;color:var(--muted);padding:0.45rem 0.75rem;border-radius:8px;transition:all 0.4s ease;}
 .step-item.done{color:var(--real)}
@@ -369,7 +368,6 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
 .img-frame{border-radius:14px;overflow:hidden;border:1px solid var(--border);background:var(--surface)}
 .img-frame img{width:100%;max-height:260px;object-fit:cover;display:block}
 .img-meta{font-family:'DM Mono',monospace;font-size:0.7rem;color:var(--muted);padding:0.5rem 0.85rem;border-top:1px solid var(--border)}
-
 .scan-btn{width:100%;margin-top:1.2rem;padding:0.9rem;background:linear-gradient(135deg,#c8a96e 0%,#7e6baa 100%);border:none;border-radius:11px;color:#fff;font-family:'Outfit',sans-serif;font-size:0.95rem;font-weight:600;cursor:pointer;letter-spacing:0.04em;transition:opacity 0.2s;display:none;}
 .scan-btn:hover{opacity:0.87}
 
@@ -380,28 +378,22 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
 .badge-real{background:rgba(78,203,141,0.15);color:var(--real);border:1px solid rgba(78,203,141,0.35)}
 .badge-sus{background:rgba(212,168,75,0.15);color:var(--sus);border:1px solid rgba(212,168,75,0.35)}
 .conf-tag{font-size:0.7rem;color:var(--muted);font-family:'DM Mono',monospace}
-
 .prob-num{font-family:'DM Serif Display',serif;font-size:3.4rem;line-height:1;color:var(--text);margin-bottom:0.2rem}
 .prob-label{font-size:0.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.14em;font-family:'DM Mono',monospace}
-
 .gauge-bar{height:5px;border-radius:3px;background:var(--surface2);margin:1rem 0;overflow:hidden;position:relative}
 .gauge-track{position:absolute;inset:0;background:linear-gradient(90deg,var(--real) 0%,var(--sus) 50%,var(--ai) 100%);opacity:0.2;border-radius:3px}
 .gauge-fill{height:100%;border-radius:3px;transition:width 1s cubic-bezier(.4,0,.2,1);background:linear-gradient(90deg,var(--real),var(--sus),var(--ai));background-size:860px 100%;position:relative}
-
 .signals{display:grid;grid-template-columns:1fr 1fr;gap:0.7rem;margin-top:1.1rem}
 .sig-card{background:var(--surface2);border-radius:10px;padding:0.8rem 0.95rem}
 .sig-name{font-size:0.68rem;color:var(--muted);font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:0.09em;margin-bottom:0.45rem}
 .sig-bar-wrap{height:3px;background:var(--border);border-radius:2px;margin-bottom:0.4rem;overflow:hidden}
 .sig-bar-fill{height:100%;border-radius:2px;transition:width 1.1s ease}
 .sig-score{font-size:0.78rem;font-weight:500;font-family:'DM Mono',monospace}
-
-.reason-box{margin-top:1.1rem;padding:1rem;background:var(--surface2);border-radius:10px;border-left:3px solid var(--accent2);display:none}
+.reason-box{margin-top:1.1rem;padding:1rem;background:var(--surface2);border-radius:10px;border-left:3px solid var(--accent2);}
 .reason-title{font-size:0.68rem;color:var(--accent2);text-transform:uppercase;letter-spacing:0.13em;font-family:'DM Mono',monospace;margin-bottom:0.45rem}
 .reason-text{font-size:0.83rem;color:var(--muted);line-height:1.7}
-
-.tech-toggle{font-size:0.72rem;color:var(--muted);font-family:'DM Mono',monospace;cursor:pointer;margin-top:0.9rem;display:inline-block;text-decoration:underline;text-underline-offset:3px;background:none;border:none;color:var(--muted)}
+.tech-toggle{font-size:0.72rem;color:var(--muted);font-family:'DM Mono',monospace;cursor:pointer;margin-top:0.9rem;display:inline-block;text-decoration:underline;text-underline-offset:3px;background:none;border:none;}
 .tech-notes{display:none;margin-top:0.6rem;font-size:0.75rem;color:var(--muted);font-family:'DM Mono',monospace;line-height:1.9;padding:0.75rem;background:var(--bg);border-radius:8px}
-
 .divider{height:1px;background:var(--border);margin:2.2rem 0}
 .history-wrap{display:none}
 .history-title{font-size:0.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.16em;font-family:'DM Mono',monospace;margin-bottom:0.8rem}
@@ -411,10 +403,10 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
 .history-score{font-family:'DM Mono',monospace;font-size:0.72rem;color:var(--muted)}
 .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
 .dot-ai{background:var(--ai)}.dot-real{background:var(--real)}.dot-sus{background:var(--sus)}
-
 .csv-btn{margin-top:1rem;padding:0.5rem 1.1rem;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--muted);font-family:'DM Mono',monospace;font-size:0.72rem;cursor:pointer;transition:all 0.2s;}
 .csv-btn:hover{border-color:var(--accent);color:var(--accent)}
 #dataContainer{display:none;}
+@media(max-width:640px){.main-grid{grid-template-columns:1fr}.signals{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -455,24 +447,252 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
     <div class="up-pct" id="upPct">0%</div>
   </div>
 
-  <!-- ANALYSIS WAITING SCREEN -->
+  <!-- ANALYSIS SCREEN -->
   <div class="analysis-wrap" id="analysisWrap">
     <div class="scan-orb">
       <div class="orb-ring"></div>
       <div class="orb-ring"></div>
       <div class="orb-ring"></div>
+      <!-- FIX: removed broken/incomplete SVG circle element -->
       <div class="orb-core">
         <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
           <circle cx="12" cy="12" r="9" stroke="#c8a96e" stroke-width="1.2" stroke-dasharray="3 3"/>
           <circle cx="12" cy="12" r="4" stroke="#7e6baa" stroke-width="1.2"/>
-          <circle cx="12" cy="12"
-                    />
+          <circle cx="12" cy="12" r="1.5" fill="#c8a96e"/>
         </svg>
       </div>
     </div>
+    <div class="scan-line-box"><div class="scan-line"></div></div>
+    <div class="analysis-title">Analyzing image…</div>
+    <div class="analysis-sub" id="analysisSub">Running forensic checks</div>
+    <ul class="steps-list" id="stepsList">
+      <li class="step-item active" id="step0"><span class="step-dot"></span>Gemini vision analysis</li>
+      <li class="step-item pending" id="step1"><span class="step-dot"></span>EXIF metadata scan</li>
+      <li class="step-item pending" id="step2"><span class="step-dot"></span>Pixel forensics</li>
+      <li class="step-item pending" id="step3"><span class="step-dot"></span>Signal fusion</li>
+    </ul>
   </div>
 
+  <!-- RESULTS GRID -->
+  <div class="main-grid" id="mainGrid">
+    <div>
+      <div class="img-frame">
+        <img id="resultImg" src="" alt="Analyzed image"/>
+        <div class="img-meta" id="imgMeta">—</div>
+      </div>
+      <button class="scan-btn" id="scanAnotherBtn" onclick="resetToUpload()">Scan another image</button>
+    </div>
+    <div class="result-card" id="resultCard">
+      <div class="verdict-row">
+        <span class="verdict-badge" id="verdictBadge">—</span>
+        <span class="conf-tag" id="confTag">—</span>
+      </div>
+      <div class="prob-num" id="probNum">—%</div>
+      <div class="prob-label">AI probability score</div>
+      <div class="gauge-bar">
+        <div class="gauge-track"></div>
+        <div class="gauge-fill" id="gaugeFill" style="width:0%"></div>
+      </div>
+      <div class="signals" id="signalsGrid"></div>
+      <div class="reason-box" id="reasonBox">
+        <div class="reason-title">Gemini analysis</div>
+        <div class="reason-text" id="reasonText">—</div>
+      </div>
+      <button class="tech-toggle" onclick="toggleTech()">show technical details</button>
+      <div class="tech-notes" id="techNotes"></div>
+    </div>
+  </div>
+
+  <div class="divider" id="histDivider" style="display:none"></div>
+  <div class="history-wrap" id="historyWrap">
+    <div class="history-title">Scan history</div>
+    <div id="historyList"></div>
+    <button class="csv-btn" onclick="exportCSV()">Export CSV</button>
+  </div>
+
+  <div id="dataContainer">PHASE_DATA_PLACEHOLDER</div>
 </div>
+
+<script>
+(function(){
+  const raw = document.getElementById('dataContainer').textContent.trim();
+  let data;
+  try { data = JSON.parse(raw); } catch(e) { return; }
+
+  const phase = data.phase;
+
+  const dropZone      = document.getElementById('dropZone');
+  const uploadWrap    = document.getElementById('uploadProgressWrap');
+  const analysisWrap  = document.getElementById('analysisWrap');
+  const mainGrid      = document.getElementById('mainGrid');
+  const resultCard    = document.getElementById('resultCard');
+  const scanBtn       = document.getElementById('scanAnotherBtn');
+  const histDivider   = document.getElementById('histDivider');
+  const historyWrap   = document.getElementById('historyWrap');
+
+  // FIX: drop zone click triggers hidden Streamlit file uploader
+  dropZone.addEventListener('click', () => {
+    const fu = window.parent.document.querySelector('[data-testid="stFileUploader"] input[type="file"]');
+    if (fu) fu.click();
+  });
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag');
+    const fu = window.parent.document.querySelector('[data-testid="stFileUploader"] input[type="file"]');
+    if (fu && e.dataTransfer.files.length) {
+      const dt = new DataTransfer();
+      dt.items.add(e.dataTransfer.files[0]);
+      fu.files = dt.files;
+      fu.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  });
+
+  if (phase === 'upload') {
+    dropZone.style.display = 'block';
+  }
+
+  else if (phase === 'uploading') {
+    dropZone.style.display = 'none';
+    uploadWrap.classList.add('active');
+    const pct = data.progress || 0;
+    document.getElementById('upBarFill').style.width = pct + '%';
+    document.getElementById('upPct').textContent = pct + '%';
+    const kb = Math.round((data.filesize || 0) / 1024);
+    document.getElementById('upSubText').textContent =
+      data.filename ? data.filename + (kb ? ' · ' + kb + ' KB' : '') : 'Reading file data';
+  }
+
+  else if (phase === 'analyzing') {
+    dropZone.style.display = 'none';
+    analysisWrap.classList.add('active');
+    // Animate steps
+    const steps = ['step0','step1','step2','step3'];
+    let cur = 0;
+    const subs = ['Running Gemini vision model…','Scanning EXIF metadata…','Running pixel forensics…','Fusing all signals…'];
+    const subEl = document.getElementById('analysisSub');
+    function advanceStep() {
+      if (cur > 0) {
+        const prev = document.getElementById(steps[cur-1]);
+        prev.className = 'step-item done';
+        prev.innerHTML = '<span class="step-check">✓</span>' + prev.textContent;
+      }
+      if (cur < steps.length) {
+        document.getElementById(steps[cur]).className = 'step-item active';
+        subEl.textContent = subs[cur];
+        cur++;
+        setTimeout(advanceStep, 1800);
+      }
+    }
+    advanceStep();
+  }
+
+  else if (phase === 'results') {
+    dropZone.style.display = 'none';
+    mainGrid.style.display = 'grid';
+    resultCard.style.display = 'block';
+    scanBtn.style.display = 'block';
+
+    const score = data.score;
+    const pct = Math.round(score * 100);
+    const label = data.label;
+    const conf = data.conf;
+
+    // Image
+    if (data.img_b64) {
+      document.getElementById('resultImg').src = 'data:image/jpeg;base64,' + data.img_b64;
+    }
+    document.getElementById('imgMeta').textContent = data.filename || '—';
+
+    // Badge
+    const badge = document.getElementById('verdictBadge');
+    badge.textContent = label;
+    badge.className = 'verdict-badge ' +
+      (label === 'AI Generated' ? 'badge-ai' : label === 'Likely Real' ? 'badge-real' : 'badge-sus');
+
+    document.getElementById('confTag').textContent = conf;
+    document.getElementById('probNum').textContent = pct + '%';
+
+    // Gauge - animate after paint
+    setTimeout(() => {
+      document.getElementById('gaugeFill').style.width = pct + '%';
+    }, 100);
+
+    // Signal cards
+    const signals = [
+      { name: 'Gemini Vision', score: data.gemini_score },
+      { name: 'EXIF Metadata', score: data.meta_score },
+      { name: 'Pixel Forensics', score: data.forensic_score },
+      { name: 'Filename', score: data.fname_score },
+    ];
+    const grid = document.getElementById('signalsGrid');
+    grid.innerHTML = signals.map(s => {
+      const sp = Math.round(s.score * 100);
+      const col = s.score >= 0.65 ? 'var(--ai)' : s.score <= 0.40 ? 'var(--real)' : 'var(--sus)';
+      return `<div class="sig-card">
+        <div class="sig-name">${s.name}</div>
+        <div class="sig-bar-wrap"><div class="sig-bar-fill" style="width:${sp}%;background:${col}"></div></div>
+        <div class="sig-score" style="color:${col}">${sp}%</div>
+      </div>`;
+    }).join('');
+
+    // Reason
+    if (data.reason) {
+      document.getElementById('reasonText').textContent = data.reason;
+    }
+
+    // Tech notes
+    document.getElementById('techNotes').innerHTML =
+      `meta: ${data.meta_note}<br>` +
+      `forensics: ${data.forensic_note}<br>` +
+      `filename: ${data.fname_note}<br>` +
+      `signal spread: ${data.spread}`;
+
+    // History
+    if (data.history && data.history.length > 0) {
+      histDivider.style.display = 'block';
+      historyWrap.style.display = 'block';
+      const list = document.getElementById('historyList');
+      list.innerHTML = data.history.slice().reverse().map(h => {
+        const dotCls = h.Result === 'AI Generated' ? 'dot-ai' : h.Result === 'Likely Real' ? 'dot-real' : 'dot-sus';
+        return `<div class="history-row">
+          <span class="dot ${dotCls}"></span>
+          <span class="history-file">${h.File}</span>
+          <span class="history-score">${h.Score} · ${h.Result}</span>
+          <span class="history-score">${h.Time}</span>
+        </div>`;
+      }).join('');
+    }
+  }
+
+  window.toggleTech = function() {
+    const el = document.getElementById('techNotes');
+    const btn = document.querySelector('.tech-toggle');
+    const visible = el.style.display === 'block';
+    el.style.display = visible ? 'none' : 'block';
+    btn.textContent = visible ? 'show technical details' : 'hide technical details';
+  };
+
+  window.exportCSV = function() {
+    if (!data.history) return;
+    const rows = [['Time','File','Score','Result'], ...data.history.map(h => [h.Time, h.File, h.Score, h.Result])];
+    const csv = rows.map(r => r.join(',')).join('\\n');
+    const a = document.createElement('a');
+    a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+    a.download = 'luminacheck_history.csv';
+    a.click();
+  };
+
+  window.resetToUpload = function() {
+    // Trigger Streamlit rerun by clicking hidden file uploader
+    const fu = window.parent.document.querySelector('[data-testid="stFileUploader"] input[type="file"]');
+    if (fu) fu.click();
+  };
+})();
+</script>
 </body>
 </html>
-"""
+""".replace("PHASE_DATA_PLACEHOLDER", result_json)
+
+components.html(HTML, height=900, scrolling=True)
