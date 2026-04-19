@@ -39,6 +39,7 @@ for key, default in {
     "current_filename": None,
     "upload_progress": 0,
     "current_file": None,
+    "ready_to_analyze": False,
 }.items():
     if key not in st.session_state:
         st.session_state[key] = default
@@ -212,41 +213,55 @@ uploaded_file = st.file_uploader(
     label_visibility="collapsed", key="img_upload"
 )
 
-# FIX: skip "uploading" phase entirely — go straight from upload → analyzing
+# Step 1: file just picked → switch to "uploading" to show upload animation, store file bytes immediately
 if uploaded_file is not None and st.session_state.ui_phase == "upload":
-    st.session_state.ui_phase = "analyzing"
     st.session_state.current_filename = uploaded_file.name
-    st.session_state.current_file = uploaded_file
+    st.session_state.current_file_bytes = uploaded_file.read()  # read now before rerun clears it
+    st.session_state.ui_phase = "uploading"
+    st.session_state.ready_to_analyze = False
     st.rerun()
 
-# FIX: removed the broken "uploading" loop that caused the stuck state
+# Step 2: show uploading animation for one render, then flip to analyzing
+if st.session_state.ui_phase == "uploading":
+    st.session_state.ui_phase = "analyzing"
+    st.rerun()
 
-if st.session_state.ui_phase == "analyzing" and st.session_state.current_file is not None:
-    with st.spinner(""):
-        image = Image.open(st.session_state.current_file).convert("RGB")
+# Step 3: show analyzing animation for one render (ready_to_analyze=False), then do work
+if st.session_state.ui_phase == "analyzing":
+    if not st.session_state.ready_to_analyze:
+        # First pass: just render the animation, schedule work for next rerun
+        st.session_state.ready_to_analyze = True
+        st.rerun()
+    else:
+        # Second pass: do the actual analysis
+        image = Image.open(io.BytesIO(st.session_state.current_file_bytes)).convert("RGB")
         result = detect(image, st.session_state.current_filename)
 
-    label = classify(result["score"])
-    conf = confidence_label(result["score"])
+        label = classify(result["score"])
+        conf = confidence_label(result["score"])
 
-    st.session_state.history.append({
-        "Time": datetime.now().strftime("%H:%M:%S"),
-        "File": st.session_state.current_filename,
-        "Score": f"{round(result['score'] * 100)}%",
-        "Result": label,
-    })
-    st.session_state.last_result = result
-    st.session_state.last_image = image
-    st.session_state.ui_phase = "results"
-    st.session_state.current_file = None
-    st.rerun()
+        st.session_state.history.append({
+            "Time": datetime.now().strftime("%H:%M:%S"),
+            "File": st.session_state.current_filename,
+            "Score": f"{round(result['score'] * 100)}%",
+            "Result": label,
+        })
+        st.session_state.last_result = result
+        st.session_state.last_image = image
+        st.session_state.ui_phase = "results"
+        st.session_state.ready_to_analyze = False
+        st.rerun()
 
 # ─── GENERATE PHASE DATA ────────────────────────────────────────────────────────
 phase_data = {"phase": st.session_state.ui_phase}
 
-# FIX: removed "uploading" block from phase_data generation (phase no longer used)
-
-if st.session_state.ui_phase == "analyzing":
+if st.session_state.ui_phase == "uploading":
+    phase_data.update({
+        "filename": st.session_state.current_filename,
+        "progress": 80,
+        "filesize": len(st.session_state.get("current_file_bytes", b"")),
+    })
+elif st.session_state.ui_phase == "analyzing":
     phase_data["progress"] = 0
 elif st.session_state.ui_phase == "results":
     result = st.session_state.last_result
