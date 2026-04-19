@@ -212,19 +212,14 @@ uploaded_file = st.file_uploader(
     label_visibility="collapsed", key="img_upload"
 )
 
+# FIX: skip "uploading" phase entirely — go straight from upload → analyzing
 if uploaded_file is not None and st.session_state.ui_phase == "upload":
-    st.session_state.ui_phase = "uploading"
+    st.session_state.ui_phase = "analyzing"
     st.session_state.current_filename = uploaded_file.name
     st.session_state.current_file = uploaded_file
-    st.session_state.upload_progress = 10
     st.rerun()
 
-if st.session_state.ui_phase == "uploading" and st.session_state.current_file is not None:
-    st.session_state.upload_progress = min(95, st.session_state.upload_progress + np.random.randint(8, 15))
-    if st.session_state.upload_progress >= 95:
-        st.session_state.ui_phase = "analyzing"
-    time.sleep(0.25)
-    st.rerun()
+# FIX: removed the broken "uploading" loop that caused the stuck state
 
 if st.session_state.ui_phase == "analyzing" and st.session_state.current_file is not None:
     with st.spinner(""):
@@ -241,7 +236,7 @@ if st.session_state.ui_phase == "analyzing" and st.session_state.current_file is
         "Result": label,
     })
     st.session_state.last_result = result
-    st.session_state.last_image = image  # FIX: store image before clearing file
+    st.session_state.last_image = image
     st.session_state.ui_phase = "results"
     st.session_state.current_file = None
     st.rerun()
@@ -249,17 +244,12 @@ if st.session_state.ui_phase == "analyzing" and st.session_state.current_file is
 # ─── GENERATE PHASE DATA ────────────────────────────────────────────────────────
 phase_data = {"phase": st.session_state.ui_phase}
 
-if st.session_state.ui_phase == "uploading":
-    phase_data.update({
-        "filename": st.session_state.current_filename,
-        "progress": st.session_state.upload_progress,
-        "filesize": st.session_state.current_file.size if st.session_state.current_file else 0
-    })
-elif st.session_state.ui_phase == "analyzing":
+# FIX: removed "uploading" block from phase_data generation (phase no longer used)
+
+if st.session_state.ui_phase == "analyzing":
     phase_data["progress"] = 0
 elif st.session_state.ui_phase == "results":
     result = st.session_state.last_result
-    # FIX: use stored image from session state instead of reopening cleared file
     image = st.session_state.get("last_image")
     if image is None:
         image = Image.new("RGB", (100, 100), color=(20, 20, 30))
@@ -299,7 +289,6 @@ HTML = """
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
-/* FIX: corrected CSS selector syntax (was *[box-sizing:...]) */
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
   --bg:#0c0c10;--surface:#13131a;--surface2:#1a1a24;
@@ -454,7 +443,6 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
       <div class="orb-ring"></div>
       <div class="orb-ring"></div>
       <div class="orb-ring"></div>
-      <!-- FIX: removed broken/incomplete SVG circle element -->
       <div class="orb-core">
         <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
           <circle cx="12" cy="12" r="9" stroke="#c8a96e" stroke-width="1.2" stroke-dasharray="3 3"/>
@@ -531,7 +519,6 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
   const histDivider   = document.getElementById('histDivider');
   const historyWrap   = document.getElementById('historyWrap');
 
-  // FIX: drop zone click triggers hidden Streamlit file uploader
   dropZone.addEventListener('click', () => {
     const fu = window.parent.document.querySelector('[data-testid="stFileUploader"] input[type="file"]');
     if (fu) fu.click();
@@ -554,6 +541,7 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
     dropZone.style.display = 'block';
   }
 
+  // FIX: "uploading" phase removed; this block kept for safety but will never trigger
   else if (phase === 'uploading') {
     dropZone.style.display = 'none';
     uploadWrap.classList.add('active');
@@ -568,7 +556,6 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
   else if (phase === 'analyzing') {
     dropZone.style.display = 'none';
     analysisWrap.classList.add('active');
-    // Animate steps
     const steps = ['step0','step1','step2','step3'];
     let cur = 0;
     const subs = ['Running Gemini vision model…','Scanning EXIF metadata…','Running pixel forensics…','Fusing all signals…'];
@@ -600,13 +587,11 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
     const label = data.label;
     const conf = data.conf;
 
-    // Image
     if (data.img_b64) {
       document.getElementById('resultImg').src = 'data:image/jpeg;base64,' + data.img_b64;
     }
     document.getElementById('imgMeta').textContent = data.filename || '—';
 
-    // Badge
     const badge = document.getElementById('verdictBadge');
     badge.textContent = label;
     badge.className = 'verdict-badge ' +
@@ -615,12 +600,10 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
     document.getElementById('confTag').textContent = conf;
     document.getElementById('probNum').textContent = pct + '%';
 
-    // Gauge - animate after paint
     setTimeout(() => {
       document.getElementById('gaugeFill').style.width = pct + '%';
     }, 100);
 
-    // Signal cards
     const signals = [
       { name: 'Gemini Vision', score: data.gemini_score },
       { name: 'EXIF Metadata', score: data.meta_score },
@@ -638,19 +621,16 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
       </div>`;
     }).join('');
 
-    // Reason
     if (data.reason) {
       document.getElementById('reasonText').textContent = data.reason;
     }
 
-    // Tech notes
     document.getElementById('techNotes').innerHTML =
       `meta: ${data.meta_note}<br>` +
       `forensics: ${data.forensic_note}<br>` +
       `filename: ${data.fname_note}<br>` +
       `signal spread: ${data.spread}`;
 
-    // History
     if (data.history && data.history.length > 0) {
       histDivider.style.display = 'block';
       historyWrap.style.display = 'block';
@@ -686,7 +666,6 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
   };
 
   window.resetToUpload = function() {
-    // Trigger Streamlit rerun by clicking hidden file uploader
     const fu = window.parent.document.querySelector('[data-testid="stFileUploader"] input[type="file"]');
     if (fu) fu.click();
   };
