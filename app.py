@@ -162,12 +162,11 @@ Where 0 = definitely real photo, 100 = definitely AI generated."""
         return 0.5, "Gemini error."
 
 def detect(image: Image.Image, filename: str) -> dict:
-    gemini_score, gemini_reason   = detect_with_gemini(image)
-    meta_score,   meta_note       = analyze_metadata(image)
+    gemini_score, gemini_reason = detect_with_gemini(image)
+    meta_score, meta_note = analyze_metadata(image)
     forensic_score, forensic_note = analyze_forensics(image)
-    fname_score,  fname_note      = analyze_filename(filename)
-
-    gemini_clipped = max(0.08, min(0.92, gemini_score))
+    fname
+ gemini_clipped = max(0.08, min(0.92, gemini_score))
     weights = {"gemini": 0.60, "metadata": 0.18, "forensics": 0.16, "filename": 0.06}
     base_score = (
         weights["gemini"]    * gemini_clipped +
