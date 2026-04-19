@@ -466,3 +466,13 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
           <circle cx="12" cy="12" r="9" stroke="#c8a96e" stroke-width="1.2" stroke-dasharray="3 3"/>
           <circle cx="12" cy="12" r="4" stroke="#7e6baa" stroke-width="1.2"/>
           <circle cx="12" cy="12"
+                    />
+        </svg>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
+"""
