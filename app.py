@@ -223,7 +223,8 @@ if st.session_state.ui_phase == "uploading" and st.session_state.current_file is
     st.session_state.upload_progress = min(95, st.session_state.upload_progress + np.random.randint(8, 15))
     if st.session_state.upload_progress >= 95:
         st.session_state.ui_phase = "analyzing"
-        st.rerun()
+    time.sleep(0.25)
+    st.rerun()
 
 if st.session_state.ui_phase == "analyzing" and st.session_state.current_file is not None:
     with st.spinner(""):
