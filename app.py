@@ -160,57 +160,68 @@ Where 0 = definitely real photo, 100 = definitely AI generated."""
         return 0.5, "Gemini analysis unavailable."
     except Exception:
         return 0.5, "Gemini error."
-
 def detect(image: Image.Image, filename: str) -> dict:
-    gemini_score, gemini_reason   = detect_with_gemini(image)
-    meta_score,   meta_note       = analyze_metadata(image)
-    forensic_score, forensic_note = analyze_forensics(image)
-    fname_score,  fname_note      = analyze_filename(filename)
+    try:
+        gemini_score, gemini_reason = detect_with_gemini(image)
+        meta_score, meta_note = analyze_metadata(image)
+        forensic_score, forensic_note = analyze_forensics(image)
+        fname_score, fname_note = analyze_filename(filename)
 
-    gemini_clipped = max(0.08, min(0.92, gemini_score))
-   # --- UPDATED SCORING LOGIC ---
-g = max(0.08, min(0.92, gemini_score))
+        g = max(0.08, min(0.92, gemini_score))
 
-base_score = (
-    0.50 * g +
-    0.18 * meta_score +
-    0.18 * forensic_score +
-    0.08 * fname_score
-)
+        base_score = (
+            0.50 * g +
+            0.18 * meta_score +
+            0.18 * forensic_score +
+            0.08 * fname_score
+        )
 
-# Override weak Gemini when other signals disagree
-suspicion = 0
+        # Override weak Gemini
+        suspicion = 0
 
-if meta_score > 0.45:
-    suspicion += 1
+        if meta_score > 0.45:
+            suspicion += 1
 
-if forensic_score > 0.40:
-    suspicion += 1
+        if forensic_score > 0.40:
+            suspicion += 1
 
-if fname_score > 0.6:
-    suspicion += 1
+        if fname_score > 0.6:
+            suspicion += 1
 
-if g < 0.25 and suspicion >= 2:
-    base_score = max(base_score, 0.45)
+        if g < 0.25 and suspicion >= 2:
+            base_score = max(base_score, 0.45)
 
-if 0.3 < g < 0.6:
-    base_score += 0.12
-    
-    final = round(max(0.0, min(1.0, base_score)), 3) 
-    
-    return {   
-        "score":          final,
-        "gemini_score":   gemini_clipped,
-        "meta_score":     meta_score,
-        "forensic_score": forensic_score,
-        "fname_score":    fname_score,
-        "reason":         gemini_reason,
-        "meta_note":      meta_note,
-        "forensic_note":  forensic_note,
-        "fname_note":     fname_note,
-        "spread":         round(spread, 3),
-    }
+        if 0.3 < g < 0.6:
+            base_score += 0.12
 
+        final = round(max(0.0, min(1.0, base_score)), 3)
+
+        return {
+            "score": final,
+            "gemini_score": g,
+            "meta_score": meta_score,
+            "forensic_score": forensic_score,
+            "fname_score": fname_score,
+            "reason": gemini_reason,
+            "meta_note": meta_note,
+            "forensic_note": forensic_note,
+            "fname_note": fname_note,
+            "spread": 0
+        }
+
+    except Exception as e:
+        return {
+            "score": 0.5,
+            "gemini_score": 0.5,
+            "meta_score": 0.5,
+            "forensic_score": 0.5,
+            "fname_score": 0.5,
+            "reason": str(e),
+            "meta_note": "",
+            "forensic_note": "",
+            "fname_note": "",
+            "spread": 0
+        }
 def classify(score: float) -> str:
     if score >= 0.75:   return "AI Generated"
     elif score <= 0.35: return "Likely Real"
