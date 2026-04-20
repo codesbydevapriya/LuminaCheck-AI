@@ -11,7 +11,21 @@ import re
 import time
 import numpy as np
 import io
+import streamlit as st
+import torch
+import torchvision.transforms as transforms
+# 👇 PASTE HERE
+@st.cache_resource
+def load_detector():
+    device = "cuda" if torch.cuda.is_available() else "cpu"
 
+    model = torch.hub.load("pytorch/vision", "resnet18", pretrained=True)
+    model.fc = torch.nn.Linear(model.fc.in_features, 2)
+
+    model.eval()
+    model.to(device)
+
+    return model, device
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
