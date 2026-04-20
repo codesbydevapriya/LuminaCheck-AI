@@ -196,7 +196,8 @@ if g < 0.25 and suspicion >= 2:
 if 0.3 < g < 0.6:
     base_score += 0.12
     
-    final = round(max(0.0, min(1.0, base_score)), 3)        
+    final = round(max(0.0, min(1.0, base_score)), 3) 
+    
     return {   
         "score":          final,
         "gemini_score":   gemini_clipped,
