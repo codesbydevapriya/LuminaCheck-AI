@@ -168,21 +168,35 @@ def detect(image: Image.Image, filename: str) -> dict:
     fname_score,  fname_note      = analyze_filename(filename)
 
     gemini_clipped = max(0.08, min(0.92, gemini_score))
-    weights = {"gemini": 0.60, "metadata": 0.18, "forensics": 0.16, "filename": 0.06}
-    base_score = (
-        weights["gemini"]    * gemini_clipped +
-        weights["metadata"]  * meta_score +
-        weights["forensics"] * forensic_score +
-        weights["filename"]  * fname_score
-    )
+   # --- UPDATED SCORING LOGIC ---
+g = max(0.08, min(0.92, gemini_score))
 
-    reliable_scores = [gemini_clipped, meta_score, forensic_score]
-    spread = max(reliable_scores) - min(reliable_scores)
-    if spread > 0.55:
-        pull = (spread - 0.55) * 0.6
-        base_score = base_score * (1 - pull) + 0.5 * pull
+base_score = (
+    0.50 * g +
+    0.18 * meta_score +
+    0.18 * forensic_score +
+    0.08 * fname_score
+)
 
-    final = round(max(0.0, min(1.0, base_score)), 3)
+# Override weak Gemini when other signals disagree
+suspicion = 0
+
+if meta_score > 0.45:
+    suspicion += 1
+
+if forensic_score > 0.40:
+    suspicion += 1
+
+if fname_score > 0.6:
+    suspicion += 1
+
+if g < 0.25 and suspicion >= 2:
+    base_score = max(base_score, 0.45)
+
+if 0.3 < g < 0.6:
+    base_score += 0.12
+
+final = round(max(0.0, min(1.0, base_score)), 3)
     return {
         "score":          final,
         "gemini_score":   gemini_clipped,
