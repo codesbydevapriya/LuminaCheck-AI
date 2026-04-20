@@ -2,12 +2,11 @@ import numpy as np
 from PIL import Image
 import io
 
-# Optional: safe cv2 import
+# SAFE cv2 import (prevents crash)
 try:
     import cv2
-    CV2_AVAILABLE = True
 except:
-    CV2_AVAILABLE = False
+    cv2 = None
 
 
 # ---------------- NEW DETECTORS ----------------
@@ -38,7 +37,7 @@ def analyze_recompression(image):
 
 def analyze_patch_consistency(image):
     try:
-        img = np.array(image.convert("L").resize((256,256)))  # ✅ FIXED
+        img = np.array(image.convert("L").resize((256,256)))
 
         patches = []
         step = 32
@@ -74,12 +73,12 @@ def analyze_patch_consistency(image):
 
 def analyze_edges(image):
     try:
-        if not CV2_AVAILABLE:
+        if cv2 is None:
             return 0.5, "cv2 not available"
 
         img = np.array(image.convert("L").resize((256,256)))
-
         edges = cv2.Canny(img, 50, 150)
+
         gy, gx = np.gradient(edges.astype(float))
         randomness = np.std(gx) + np.std(gy)
 
@@ -97,57 +96,91 @@ def analyze_edges(image):
 # ---------------- UPDATED DETECT ----------------
 
 def detect(image: Image.Image, filename: str) -> dict:
-    gemini_score, gemini_reason = detect_with_gemini(image)
-    meta_score, meta_note = analyze_metadata(image)
-    forensic_score, forensic_note = analyze_forensics(image)
-    fname_score, fname_note = analyze_filename(filename)
+    try:
+        gemini_score, gemini_reason = detect_with_gemini(image)
+        meta_score, meta_note = analyze_metadata(image)
+        forensic_score, forensic_note = analyze_forensics(image)
+        fname_score, fname_note = analyze_filename(filename)
 
-    # NEW SIGNALS
-    recomp_score, _ = analyze_recompression(image)
-    patch_score, _ = analyze_patch_consistency(image)
-    edge_score, _ = analyze_edges(image)
+        # SAFE DEFAULTS
+        recomp_score = 0.5
+        patch_score = 0.5
+        edge_score = 0.5
 
-    g = max(0.1, min(0.95, gemini_score))
+        # SAFE EXECUTION
+        try:
+            recomp_score, _ = analyze_recompression(image)
+        except:
+            pass
 
-    base = (
-        0.55 * g +
-        0.10 * meta_score +
-        0.08 * forensic_score +
-        0.05 * fname_score +
-        0.07 * recomp_score +
-        0.08 * patch_score +
-        0.07 * edge_score
-    )
+        try:
+            patch_score, _ = analyze_patch_consistency(image)
+        except:
+            pass
 
-    # AGGRESSIVE BOOSTS
-    if patch_score > 0.7:
-        base += 0.08
+        try:
+            edge_score, _ = analyze_edges(image)
+        except:
+            pass
 
-    if recomp_score > 0.7:
-        base += 0.07
+        g = max(0.1, min(0.95, gemini_score))
 
-    if edge_score > 0.65:
-        base += 0.05
+        base = (
+            0.55 * g +
+            0.10 * meta_score +
+            0.08 * forensic_score +
+            0.05 * fname_score +
+            0.07 * recomp_score +
+            0.08 * patch_score +
+            0.07 * edge_score
+        )
 
-    if 0.3 < g < 0.6:
-        base += 0.12
+        # AGGRESSIVE BOOSTS
+        if patch_score > 0.7:
+            base += 0.08
 
-    final = max(0.0, min(1.0, base))
+        if recomp_score > 0.7:
+            base += 0.07
 
-    return {
-        "score": round(final, 3),
-        "gemini_score": g,
-        "meta_score": meta_score,
-        "forensic_score": forensic_score,
-        "fname_score": fname_score,
-        "recomp_score": recomp_score,
-        "patch_score": patch_score,
-        "edge_score": edge_score,
-        "reason": gemini_reason,
-        "meta_note": meta_note,
-        "forensic_note": forensic_note,
-        "fname_note": fname_note,
-    }
+        if edge_score > 0.65:
+            base += 0.05
+
+        if 0.3 < g < 0.6:
+            base += 0.12
+
+        final = max(0.0, min(1.0, base))
+
+        return {
+            "score": round(final, 3),
+            "gemini_score": g,
+            "meta_score": meta_score,
+            "forensic_score": forensic_score,
+            "fname_score": fname_score,
+            "recomp_score": recomp_score,
+            "patch_score": patch_score,
+            "edge_score": edge_score,
+            "reason": gemini_reason,
+            "meta_note": meta_note,
+            "forensic_note": forensic_note,
+            "fname_note": fname_note,
+        }
+
+    except Exception as e:
+        # FAIL-SAFE (prevents blank screen)
+        return {
+            "score": 0.5,
+            "gemini_score": 0.5,
+            "meta_score": 0.5,
+            "forensic_score": 0.5,
+            "fname_score": 0.5,
+            "recomp_score": 0.5,
+            "patch_score": 0.5,
+            "edge_score": 0.5,
+            "reason": f"Error: {str(e)}",
+            "meta_note": "",
+            "forensic_note": "",
+            "fname_note": "",
+        }
 
 
 # ---------------- CLASSIFICATION ----------------
