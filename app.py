@@ -11,7 +11,6 @@ import re
 import time
 import numpy as np
 import io
-import threading
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
@@ -55,6 +54,7 @@ st.markdown("""
 for key, default in {
     "history": [],
     "last_result": None,
+    "last_image": None,
     "current_file_bytes": b"",
     "ui_phase": "upload",
     "current_filename": None,
@@ -63,8 +63,6 @@ for key, default in {
     "ready_to_analyze": False,
     "analysis_start_time": None,
     "analysis_elapsed_ms": 0,
-    "_bg_result": None,
-    "_bg_running": False,
 }.items():
     if key not in st.session_state:
         st.session_state[key] = default
@@ -369,47 +367,35 @@ uploaded_file = st.file_uploader(
     label_visibility="collapsed", key="img_upload"
 )
 
-# PHASE 1: file just dropped → store bytes, show analyzing screen immediately
+# Accept new upload from EITHER "upload" or "results" phase
 if uploaded_file is not None and st.session_state.ui_phase in ("upload", "results"):
-    file_bytes = uploaded_file.read()
-    image = Image.open(io.BytesIO(file_bytes)).convert("RGB")
-    buf = io.BytesIO()
-    thumb = image.copy()
-    thumb.thumbnail((800, 800))
-    thumb.save(buf, format="JPEG", quality=82)
-    st.session_state.current_file_bytes = buf.getvalue()
     st.session_state.current_filename = uploaded_file.name
-    st.session_state.analysis_start_time = time.time()
+    st.session_state.current_file_bytes = uploaded_file.read()
+    st.session_state.ui_phase = "uploading"
+    st.session_state.ready_to_analyze = False
+    st.rerun()
+
+if st.session_state.ui_phase == "uploading":
     st.session_state.ui_phase = "analyzing"
-    st.session_state.ready_to_analyze = True
-    st.session_state._bg_result = None   # clear any previous background result
-    st.rerun()  # fast — just shows the spinner
+    st.rerun()
 
-# PHASE 2: analyzing screen visible → kick off background thread if not started
-if st.session_state.ui_phase == "analyzing" and st.session_state.ready_to_analyze:
-    # Only start the thread once
-    if st.session_state.get("_bg_result") is None and not st.session_state.get("_bg_running"):
-        st.session_state._bg_running = True
+if st.session_state.ui_phase == "analyzing":
+    if not st.session_state.ready_to_analyze:
+        # First pass: render the animation, record start time, schedule work
+        st.session_state.ready_to_analyze = True
+        st.session_state.analysis_start_time = time.time()
+        st.rerun()
+    else:
+        image = Image.open(io.BytesIO(st.session_state.current_file_bytes)).convert("RGB")
+        result = detect(image, st.session_state.current_filename)
 
-        def _run_detect():
-            try:
-                img = Image.open(io.BytesIO(st.session_state.current_file_bytes)).convert("RGB")
-                res = detect(img, st.session_state.current_filename)
-                st.session_state._bg_result = res
-            except Exception as e:
-                st.session_state._bg_result = {"error": str(e)}
-            finally:
-                st.session_state._bg_running = False
-
-        t = threading.Thread(target=_run_detect, daemon=True)
-        t.start()
-
-    # Poll: if background thread finished, advance to results
-    if st.session_state.get("_bg_result") is not None:
-        result = st.session_state._bg_result
+        # Record how long the real analysis took (in ms) so JS can sync its timer
         elapsed = time.time() - (st.session_state.analysis_start_time or time.time())
         st.session_state.analysis_elapsed_ms = int(elapsed * 1000)
+
         label = classify(result["score"])
+        conf = confidence_label(result["score"])
+
         st.session_state.history.append({
             "Time": datetime.now().strftime("%H:%M:%S"),
             "File": st.session_state.current_filename,
@@ -417,14 +403,9 @@ if st.session_state.ui_phase == "analyzing" and st.session_state.ready_to_analyz
             "Result": label,
         })
         st.session_state.last_result = result
+        st.session_state.last_image = image
         st.session_state.ui_phase = "results"
         st.session_state.ready_to_analyze = False
-        st.session_state._bg_result = None
-        st.session_state._bg_running = False
-        st.rerun()
-    else:
-        # Still running — auto-refresh every 1.5s to check if done
-        time.sleep(1.5)
         st.rerun()
 
 # ─── HIDE UPLOADER OVERLAY DURING NON-UPLOAD PHASES ──────────────────────────
@@ -451,14 +432,15 @@ elif st.session_state.ui_phase == "analyzing":
 
 if st.session_state.ui_phase == "results":
     result = st.session_state.last_result
-    # Use the pre-thumbnailed bytes stored during upload — no re-processing needed
-    img_bytes = st.session_state.current_file_bytes
-    if not img_bytes:
-        fallback = Image.new("RGB", (100, 100), color=(20, 20, 30))
-        buf = io.BytesIO()
-        fallback.save(buf, format="JPEG", quality=82)
-        img_bytes = buf.getvalue()
-    img_b64 = base64.b64encode(img_bytes).decode()
+    image = getattr(st.session_state, "last_image", None)
+    if image is None:
+        image = Image.new("RGB", (100, 100), color=(20, 20, 30))
+
+    buf = io.BytesIO()
+    thumb = image.copy()
+    thumb.thumbnail((640, 640))
+    thumb.save(buf, format="JPEG", quality=82)
+    img_b64 = base64.b64encode(buf.getvalue()).decode()
 
     phase_data.update({
         "score": result["score"],
