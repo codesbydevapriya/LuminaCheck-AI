@@ -54,7 +54,6 @@ st.markdown("""
 for key, default in {
     "history": [],
     "last_result": None,
-    "last_image": None,
     "current_file_bytes": b"",
     "ui_phase": "upload",
     "current_filename": None,
@@ -369,44 +368,37 @@ uploaded_file = st.file_uploader(
 
 # Accept new upload from EITHER "upload" or "results" phase
 if uploaded_file is not None and st.session_state.ui_phase in ("upload", "results"):
+    file_bytes = uploaded_file.read()
+    # Skip the intermediate "uploading" and "analyzing" states entirely.
+    # Read the file, run analysis immediately, and jump straight to results.
+    # This removes 2 wasted st.rerun() round-trips that caused visible lag.
     st.session_state.current_filename = uploaded_file.name
-    st.session_state.current_file_bytes = uploaded_file.read()
-    st.session_state.ui_phase = "uploading"
+    st.session_state.analysis_start_time = time.time()
+    st.session_state.ui_phase = "analyzing"
+
+    image = Image.open(io.BytesIO(file_bytes)).convert("RGB")
+    result = detect(image, st.session_state.current_filename)
+
+    elapsed = time.time() - st.session_state.analysis_start_time
+    st.session_state.analysis_elapsed_ms = int(elapsed * 1000)
+
+    label = classify(result["score"])
+    st.session_state.history.append({
+        "Time": datetime.now().strftime("%H:%M:%S"),
+        "File": st.session_state.current_filename,
+        "Score": f"{round(result['score'] * 100)}%",
+        "Result": label,
+    })
+    st.session_state.last_result = result
+    # Store a small thumbnail instead of raw bytes to reduce session state size
+    buf = io.BytesIO()
+    thumb = image.copy()
+    thumb.thumbnail((800, 800))
+    thumb.save(buf, format="JPEG", quality=85)
+    st.session_state.current_file_bytes = buf.getvalue()
+    st.session_state.ui_phase = "results"
     st.session_state.ready_to_analyze = False
     st.rerun()
-
-if st.session_state.ui_phase == "uploading":
-    st.session_state.ui_phase = "analyzing"
-    st.rerun()
-
-if st.session_state.ui_phase == "analyzing":
-    if not st.session_state.ready_to_analyze:
-        # First pass: render the animation, record start time, schedule work
-        st.session_state.ready_to_analyze = True
-        st.session_state.analysis_start_time = time.time()
-        st.rerun()
-    else:
-        image = Image.open(io.BytesIO(st.session_state.current_file_bytes)).convert("RGB")
-        result = detect(image, st.session_state.current_filename)
-
-        # Record how long the real analysis took (in ms) so JS can sync its timer
-        elapsed = time.time() - (st.session_state.analysis_start_time or time.time())
-        st.session_state.analysis_elapsed_ms = int(elapsed * 1000)
-
-        label = classify(result["score"])
-        conf = confidence_label(result["score"])
-
-        st.session_state.history.append({
-            "Time": datetime.now().strftime("%H:%M:%S"),
-            "File": st.session_state.current_filename,
-            "Score": f"{round(result['score'] * 100)}%",
-            "Result": label,
-        })
-        st.session_state.last_result = result
-        st.session_state.last_image = image
-        st.session_state.ui_phase = "results"
-        st.session_state.ready_to_analyze = False
-        st.rerun()
 
 # ─── HIDE UPLOADER OVERLAY DURING NON-UPLOAD PHASES ──────────────────────────
 # Inject a body class so the transparent overlay is removed when not needed
@@ -432,15 +424,14 @@ elif st.session_state.ui_phase == "analyzing":
 
 if st.session_state.ui_phase == "results":
     result = st.session_state.last_result
-    image = getattr(st.session_state, "last_image", None)
-    if image is None:
-        image = Image.new("RGB", (100, 100), color=(20, 20, 30))
-
-    buf = io.BytesIO()
-    thumb = image.copy()
-    thumb.thumbnail((640, 640))
-    thumb.save(buf, format="JPEG", quality=82)
-    img_b64 = base64.b64encode(buf.getvalue()).decode()
+    # Use the pre-thumbnailed bytes stored during upload — no re-processing needed
+    img_bytes = st.session_state.current_file_bytes
+    if not img_bytes:
+        fallback = Image.new("RGB", (100, 100), color=(20, 20, 30))
+        buf = io.BytesIO()
+        fallback.save(buf, format="JPEG", quality=82)
+        img_bytes = buf.getvalue()
+    img_b64 = base64.b64encode(img_bytes).decode()
 
     phase_data.update({
         "score": result["score"],
