@@ -11,9 +11,17 @@ import re
 import time
 import numpy as np
 import io
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+
+# Initialize Gemini once at module level (avoid re-init on every call)
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+    _gemini_model = genai.GenerativeModel("gemini-1.5-flash-8b")
+else:
+    _gemini_model = None
 
 st.set_page_config(
     page_title="LuminaCheck AI",
@@ -28,7 +36,6 @@ st.markdown("""
 .block-container { padding: 0 !important; max-width: 100% !important; }
 .stApp { background: #0c0c10; }
 
-/* The real Streamlit uploader sits invisibly over the whole page in upload phase */
 [data-testid="stFileUploader"] {
     position: fixed !important;
     top: 0 !important; left: 0 !important;
@@ -90,6 +97,7 @@ def analyze_metadata(image: Image.Image) -> tuple:
     except Exception:
         return 0.45, "EXIF read error"
 
+
 def analyze_forensics(image: Image.Image) -> tuple:
     try:
         img_resized = image.resize((256, 256))
@@ -117,38 +125,29 @@ def analyze_forensics(image: Image.Image) -> tuple:
     except Exception:
         return 0.45, "Forensics error"
 
+
 def generate_heatmap_b64(image: Image.Image) -> str:
-    """Generate a forensic heatmap showing suspicious regions."""
     try:
         w, h = image.size
         img_resized = image.resize((256, 256))
         gray = np.array(img_resized.convert("L"), dtype=np.float32)
 
-        # Edge inconsistency map
-        from PIL import ImageFilter
         pil_gray = Image.fromarray(gray.astype(np.uint8))
         edges = np.array(pil_gray.filter(ImageFilter.FIND_EDGES), dtype=np.float32)
-
-        # Noise residual map (difference from blurred = high-freq noise)
         blurred = np.array(pil_gray.filter(ImageFilter.GaussianBlur(radius=2)), dtype=np.float32)
         noise = np.abs(gray - blurred)
 
-        # Combine: areas with low edge + low noise = suspiciously smooth (AI-like)
-        # Invert: high value = more AI-suspicious
         smooth_map = 1.0 - (edges / (edges.max() + 1e-6))
         noise_norm = noise / (noise.max() + 1e-6)
         heat = (0.6 * smooth_map + 0.4 * (1.0 - noise_norm))
         heat = (heat * 255).clip(0, 255).astype(np.uint8)
 
-        # Colorize: blue=real → yellow=suspicious → red=AI
         heatmap_rgb = np.zeros((256, 256, 3), dtype=np.uint8)
-        heatmap_rgb[:, :, 0] = np.clip(heat * 2 - 128, 0, 255)        # R
-        heatmap_rgb[:, :, 1] = np.clip(255 - np.abs(heat - 128) * 2, 0, 255)  # G
-        heatmap_rgb[:, :, 2] = np.clip(255 - heat * 2, 0, 255)         # B
+        heatmap_rgb[:, :, 0] = np.clip(heat * 2 - 128, 0, 255)
+        heatmap_rgb[:, :, 1] = np.clip(255 - np.abs(heat - 128) * 2, 0, 255)
+        heatmap_rgb[:, :, 2] = np.clip(255 - heat * 2, 0, 255)
 
         heatmap_pil = Image.fromarray(heatmap_rgb).resize((w, h), Image.LANCZOS)
-
-        # Blend with original
         orig_resized = image.resize((w, h))
         blended = Image.blend(orig_resized, heatmap_pil, alpha=0.55)
 
@@ -158,6 +157,7 @@ def generate_heatmap_b64(image: Image.Image) -> str:
         return base64.b64encode(buf.getvalue()).decode()
     except Exception:
         return ""
+
 
 def analyze_filename(filename: str) -> tuple:
     name = filename.lower()
@@ -171,19 +171,22 @@ def analyze_filename(filename: str) -> tuple:
         return 0.15, "Camera-style filename"
     return 0.40, "Neutral filename"
 
-def resize_for_gemini(image: Image.Image, max_px: int = 768) -> Image.Image:
+
+def resize_for_gemini(image: Image.Image, max_px: int = 512) -> Image.Image:
     w, h = image.size
     if max(w, h) <= max_px:
         return image
     ratio = max_px / max(w, h)
     return image.resize((int(w * ratio), int(h * ratio)), Image.LANCZOS)
 
+
 def detect_with_gemini(image: Image.Image) -> tuple:
     """Returns (score 0-1, reason_text, likely_generator)"""
     try:
-        genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel("gemini-2.5-flash")
-        small_img = resize_for_gemini(image, max_px=768)
+        if _gemini_model is None:
+            return 0.5, "Gemini API key not configured.", "Unknown"
+
+        small_img = resize_for_gemini(image, max_px=512)
         prompt = """You are a forensic AI image analyst. Analyze this image carefully.
 
 Examine these signals:
@@ -206,16 +209,15 @@ Where SCORE 0 = definitely real photo, 100 = definitely AI generated."""
 
         for attempt in range(3):
             try:
-                response = model.generate_content(
+                response = _gemini_model.generate_content(
                     [prompt, small_img],
                     generation_config=genai.GenerationConfig(
-                        max_output_tokens=250,
+                        max_output_tokens=150,
                         temperature=0.1,
                     )
                 )
                 text = response.text.strip()
 
-                # Robust multi-pattern score parsing
                 score_match = (
                     re.search(r"SCORE:\s*(\d+(?:\.\d+)?)", text) or
                     re.search(r"score[:\s]+(\d+)", text, re.IGNORECASE) or
@@ -236,7 +238,6 @@ Where SCORE 0 = definitely real photo, 100 = definitely AI generated."""
                     reason = "No detailed analysis returned."
                     if reason_match:
                         reason = reason_match.group(1).strip()
-                        # Clean up any trailing markers
                         reason = re.sub(r'\s*(GENERATOR|SCORE):.*$', '', reason, flags=re.DOTALL).strip()
 
                     generator = "Unknown"
@@ -258,16 +259,23 @@ Where SCORE 0 = definitely real photo, 100 = definitely AI generated."""
 
 def detect(image: Image.Image, filename: str) -> dict:
     try:
-        gemini_score, gemini_reason, generator = detect_with_gemini(image)
-        meta_score, meta_note = analyze_metadata(image)
-        forensic_score, forensic_note = analyze_forensics(image)
-        fname_score, fname_note = analyze_filename(filename)
+        # ── Run ALL analyses in parallel for maximum speed ──────────────────
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            f_gemini   = executor.submit(detect_with_gemini, image)
+            f_meta     = executor.submit(analyze_metadata, image)
+            f_forensic = executor.submit(analyze_forensics, image)
+            f_fname    = executor.submit(analyze_filename, filename)
+            f_heatmap  = executor.submit(generate_heatmap_b64, image)
+
+            gemini_score, gemini_reason, generator = f_gemini.result()
+            meta_score, meta_note                  = f_meta.result()
+            forensic_score, forensic_note          = f_forensic.result()
+            fname_score, fname_note                = f_fname.result()
+            heatmap_b64                            = f_heatmap.result()
 
         g = max(0.08, min(0.92, gemini_score))
 
-        # ── Dynamic Gemini weighting ──────────────────────────────────────────
-        # When Gemini is highly confident (>0.75 or <0.25), trust it more
-        gemini_confidence = abs(g - 0.5) * 2  # 0 = uncertain, 1 = very confident
+        gemini_confidence = abs(g - 0.5) * 2
         if gemini_confidence >= 0.5:
             gemini_weight = 0.65
             other_weight = 0.35 / 3
@@ -282,7 +290,6 @@ def detect(image: Image.Image, filename: str) -> dict:
             other_weight * fname_score
         )
 
-        # ── Suspicion overrides ───────────────────────────────────────────────
         suspicion = 0
         if meta_score > 0.45:
             suspicion += 1
@@ -291,11 +298,9 @@ def detect(image: Image.Image, filename: str) -> dict:
         if fname_score > 0.6:
             suspicion += 1
 
-        # If Gemini says real but other signals disagree strongly, bump up
         if g < 0.25 and suspicion >= 2:
             base_score = max(base_score, 0.45)
 
-        # Narrow uncertainty zone: slight push toward a decision when mid-range
         if 0.35 < g < 0.55:
             base_score += 0.06
 
@@ -303,9 +308,6 @@ def detect(image: Image.Image, filename: str) -> dict:
 
         scores = [g, meta_score, forensic_score, fname_score]
         spread_val = round(max(scores) - min(scores), 3)
-
-        # Generate heatmap
-        heatmap_b64 = generate_heatmap_b64(image)
 
         return {
             "score": final,
@@ -338,10 +340,12 @@ def detect(image: Image.Image, filename: str) -> dict:
             "heatmap_b64": "",
         }
 
+
 def classify(score: float) -> str:
     if score >= 0.70:   return "AI Generated"
     elif score <= 0.30: return "Likely Real"
     else:               return "Suspicious"
+
 
 def confidence_label(score: float) -> str:
     dist = abs(score - 0.5)
@@ -349,9 +353,8 @@ def confidence_label(score: float) -> str:
     elif dist >= 0.15: return "Medium Confidence"
     else:              return "Low Confidence"
 
-# ─── STATE MACHINE LOGIC ───────────────────────────────────────────────────────
 
-# Handle reset triggered by "Scan another image" button via query param
+# ─── STATE MACHINE LOGIC ───────────────────────────────────────────────────────
 if st.query_params.get("reset") == "1":
     st.session_state.ui_phase = "upload"
     st.session_state.last_result = None
@@ -367,7 +370,6 @@ uploaded_file = st.file_uploader(
     label_visibility="collapsed", key="img_upload"
 )
 
-# Accept new upload from EITHER "upload" or "results" phase
 if uploaded_file is not None and st.session_state.ui_phase in ("upload", "results"):
     st.session_state.current_filename = uploaded_file.name
     st.session_state.current_file_bytes = uploaded_file.read()
@@ -381,7 +383,6 @@ if st.session_state.ui_phase == "uploading":
 
 if st.session_state.ui_phase == "analyzing":
     if not st.session_state.ready_to_analyze:
-        # First pass: render the animation, record start time, schedule work
         st.session_state.ready_to_analyze = True
         st.session_state.analysis_start_time = time.time()
         st.rerun()
@@ -389,7 +390,6 @@ if st.session_state.ui_phase == "analyzing":
         image = Image.open(io.BytesIO(st.session_state.current_file_bytes)).convert("RGB")
         result = detect(image, st.session_state.current_filename)
 
-        # Record how long the real analysis took (in ms) so JS can sync its timer
         elapsed = time.time() - (st.session_state.analysis_start_time or time.time())
         st.session_state.analysis_elapsed_ms = int(elapsed * 1000)
 
@@ -409,12 +409,11 @@ if st.session_state.ui_phase == "analyzing":
         st.rerun()
 
 # ─── HIDE UPLOADER OVERLAY DURING NON-UPLOAD PHASES ──────────────────────────
-# Inject a body class so the transparent overlay is removed when not needed
 _phase = st.session_state.ui_phase
 if _phase in ("analyzing", "results", "uploading"):
-    st.markdown(f"""
+    st.markdown("""
 <style>
-[data-testid="stFileUploader"] {{ display: none !important; }}
+[data-testid="stFileUploader"] { display: none !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -425,14 +424,14 @@ if st.session_state.ui_phase == "uploading":
     phase_data.update({
         "filename": st.session_state.current_filename,
         "progress": 80,
-        "filesize": len(getattr(st.session_state, "current_file_bytes", b"")),
+        "filesize": len(st.session_state.current_file_bytes),
     })
 elif st.session_state.ui_phase == "analyzing":
     phase_data["progress"] = 0
 
 if st.session_state.ui_phase == "results":
     result = st.session_state.last_result
-    image = getattr(st.session_state, "last_image", None)
+    image = st.session_state.last_image
     if image is None:
         image = Image.new("RGB", (100, 100), color=(20, 20, 30))
 
@@ -540,7 +539,6 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
 
 .main-grid{display:none;grid-template-columns:1fr 1.35fr;gap:1.5rem;margin-top:1.5rem;align-items:start}
 
-/* Image frame with heatmap toggle */
 .img-frame{border-radius:14px;overflow:hidden;border:1px solid var(--border);background:var(--surface);position:relative}
 .img-frame img{width:100%;max-height:260px;object-fit:cover;display:block}
 .img-overlay{position:absolute;inset:0;opacity:0;transition:opacity 0.4s ease;pointer-events:none}
@@ -569,7 +567,6 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
 .gauge-track{position:absolute;inset:0;background:linear-gradient(90deg,var(--real) 0%,var(--sus) 50%,var(--ai) 100%);opacity:0.2;border-radius:3px}
 .gauge-fill{height:100%;border-radius:3px;transition:width 1s cubic-bezier(.4,0,.2,1);background:linear-gradient(90deg,var(--real),var(--sus),var(--ai));background-size:860px 100%;position:relative}
 
-/* Generator tag */
 .generator-tag{display:inline-flex;align-items:center;gap:0.4rem;font-size:0.68rem;font-family:'DM Mono',monospace;color:var(--accent);background:rgba(200,169,110,0.1);border:1px solid rgba(200,169,110,0.25);border-radius:6px;padding:0.2rem 0.6rem;margin-top:0.5rem}
 .generator-tag svg{width:10px;height:10px;opacity:0.7}
 
@@ -585,7 +582,6 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
 .tech-toggle{font-size:0.72rem;color:var(--muted);font-family:'DM Mono',monospace;cursor:pointer;margin-top:0.9rem;display:inline-block;text-decoration:underline;text-underline-offset:3px;background:none;border:none;}
 .tech-notes{display:none;margin-top:0.6rem;font-size:0.75rem;color:var(--muted);font-family:'DM Mono',monospace;line-height:1.9;padding:0.75rem;background:var(--bg);border-radius:8px}
 
-/* Export row */
 .export-row{display:flex;gap:0.6rem;margin-top:1rem;flex-wrap:wrap}
 .action-btn{padding:0.45rem 1rem;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--muted);font-family:'DM Mono',monospace;font-size:0.72rem;cursor:pointer;transition:all 0.2s;}
 .action-btn:hover{border-color:var(--accent);color:var(--accent)}
@@ -609,7 +605,7 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
 <div class="wrap">
   <div class="header">
     <div class="logo">Lumina<span>Check</span><span class="logo-tag">AI</span></div>
-    <div class="tagline">Forensic Image Authentication &nbsp;·&nbsp; Gemini 2.5 Flash + Hybrid Signals</div>
+    <div class="tagline">Forensic Image Authentication &nbsp;·&nbsp; Gemini 1.5 Flash + Hybrid Signals</div>
   </div>
 
   <!-- DROP ZONE -->
@@ -747,9 +743,6 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
   const histDivider   = document.getElementById('histDivider');
   const historyWrap   = document.getElementById('historyWrap');
 
-  // The real Streamlit file uploader is a transparent overlay on the parent page.
-  // Clicking anywhere on the page (outside the iframe) triggers it directly.
-  // The drop zone is purely decorative UI — no JS click forwarding needed.
   dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag'); });
   dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag'));
   dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('drag'); });
@@ -768,7 +761,6 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
     document.getElementById('upSubText').textContent =
       data.filename ? data.filename + (kb ? ' · ' + kb + ' KB' : '') : 'Reading file data';
 
-    // Live upload timer
     const uploadTimerEl = document.getElementById('uploadTimer');
     const uploadStart = Date.now();
     const uploadTimerInterval = setInterval(() => {
@@ -786,9 +778,6 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
     const subs  = ['Running Gemini vision model…','Scanning EXIF metadata…','Generating forensic heatmap…','Fusing all signals…'];
     const subEl = document.getElementById('analysisSub');
 
-    // ── Elapsed time display ──────────────────────────────────────────────────
-    // If results are already in (phase === 'results'), we know the real elapsed ms.
-    // If still analyzing, we count up live so the user sees real time passing.
     const realElapsedMs = data.elapsed_ms || 0;
     const isResultsReady = (phase === 'results');
 
@@ -797,7 +786,6 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
     timerEl.textContent = '0.0s';
     analysisWrap.appendChild(timerEl);
 
-    // Progress bar — stretches to fill the real analysis duration
     const progressBar = document.createElement('div');
     progressBar.style.cssText = 'height:3px;border-radius:2px;background:var(--surface2);overflow:hidden;position:relative;max-width:380px;margin:0.8rem auto 0';
     const progressFill = document.createElement('div');
@@ -805,7 +793,6 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
     progressBar.appendChild(progressFill);
     analysisWrap.appendChild(progressBar);
 
-    // Particle burst
     const canvas = document.createElement('canvas');
     canvas.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:10;opacity:0;transition:opacity 0.5s';
     canvas.width = window.innerWidth; canvas.height = window.innerHeight;
@@ -837,9 +824,6 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
     }
 
     let cur = 0;
-    const stepInterval = isResultsReady
-      ? Math.max(realElapsedMs / steps.length, 800)  // spread steps over real time
-      : 3000;                                          // unknown — slow pulse while waiting
 
     function markStep(i, done) {
       const el = document.getElementById(steps[i]);
@@ -853,31 +837,21 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
       }
     }
 
-    // ── Two modes ─────────────────────────────────────────────────────────────
-    // MODE A — "analyzing": results not ready yet. Count up live, loop step 0,
-    //   show a "waiting for AI…" pulsing state until Streamlit reruns with results.
-    // MODE B — "results": real elapsed time known. Play a compressed replay of
-    //   the animation synced to actual time, then crossfade to results.
-
     const animStart = Date.now();
 
     if (!isResultsReady) {
-      // MODE A: live counting, no auto-finish — Streamlit will rerun when done
       markStep(0, false);
       const liveInterval = setInterval(() => {
         const secs = ((Date.now() - animStart) / 1000).toFixed(1);
         timerEl.textContent = secs + 's  ·  waiting for AI…';
         const elapsed = Date.now() - animStart;
-        // Slowly advance through steps (never mark all done — results aren't ready)
         const newStep = Math.min(steps.length - 2, Math.floor(elapsed / 4000));
         if (newStep > cur) { markStep(cur, true); cur = newStep; markStep(cur, false); }
-        // Progress bar crawls to 90% then stalls — never reaches 100 until results
         const pct = Math.min(88, (elapsed / 20000) * 100);
         progressFill.style.width = pct + '%';
       }, 200);
     } else {
-      // MODE B: replay synced to real elapsed time, then show results
-      const TOTAL_MS = Math.max(realElapsedMs + 600, 3000); // at least 3s for UX
+      const TOTAL_MS = Math.max(realElapsedMs + 600, 3000);
       markStep(0, false);
 
       const tickInterval = setInterval(() => {
@@ -890,7 +864,6 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
         if (newStep > cur) { markStep(cur, true); cur = newStep; markStep(cur, false); }
       }, 100);
 
-      // Particles 800ms before end
       setTimeout(() => { canvas.style.opacity = '1'; spawnParticles(); animParticles(); }, Math.max(TOTAL_MS - 800, 500));
 
       setTimeout(() => {
@@ -941,7 +914,6 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
     document.getElementById('confTag').textContent = data.conf;
     document.getElementById('probNum').textContent = '—%';
 
-    // Show generator if AI detected and generator known
     const generator = data.generator || '';
     const generatorWrap = document.getElementById('generatorWrap');
     if (generator && generator !== 'Unknown' && generator !== 'Real Photo' && score >= 0.50) {
@@ -967,10 +939,10 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
     setTimeout(() => { document.getElementById('gaugeFill').style.width = pct + '%'; }, 500);
 
     const signals = [
-      { name: 'Gemini Vision',  score: data.gemini_score },
-      { name: 'EXIF Metadata',  score: data.meta_score },
-      { name: 'Pixel Forensics',score: data.forensic_score },
-      { name: 'Filename',       score: data.fname_score },
+      { name: 'Gemini Vision',   score: data.gemini_score },
+      { name: 'EXIF Metadata',   score: data.meta_score },
+      { name: 'Pixel Forensics', score: data.forensic_score },
+      { name: 'Filename',        score: data.fname_score },
     ];
     const grid = document.getElementById('signalsGrid');
     grid.innerHTML = signals.map(s => {
@@ -1035,7 +1007,7 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
   window.exportCSV = function() {
     if (!data.history) return;
     const rows = [['Time','File','Score','Result'], ...data.history.map(h => [h.Time, h.File, h.Score, h.Result])];
-    const csv = rows.map(r => r.join(',')).join('\n');
+    const csv = rows.map(r => r.join(',')).join('\\n');
     const a = document.createElement('a');
     a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
     a.download = 'luminacheck_history.csv';
@@ -1062,12 +1034,12 @@ th{font-size:0.7rem;text-transform:uppercase;color:#999;letter-spacing:0.1em}
 .footer{margin-top:2rem;font-size:0.7rem;color:#aaa;border-top:1px solid #eee;padding-top:1rem}
 </style></head><body>
 <h1>LuminaCheck AI — Forensic Report</h1>
-<div class="sub">Generated ${now} &nbsp;·&nbsp; ${data.filename || '—'}</div>
+<div class="sub">Generated ${now} · ${data.filename || '—'}</div>
 <span class="badge badge-${data.label === 'AI Generated' ? 'ai' : data.label === 'Likely Real' ? 'real' : 'sus'}">${data.label}</span>
 &nbsp;<span style="font-size:0.8rem;color:#888">${data.conf}</span>
 <div class="score">${pct}%</div>
 <div style="font-size:0.8rem;color:#888;margin-bottom:1rem">AI probability score</div>
-${data.generator && data.generator !== 'Unknown' && data.generator !== 'Real Photo' ? `<div style="font-size:0.85rem;color:#7e6baa;margin-bottom:1rem">Likely generator: <strong>${data.generator}</strong></div>` : ''}
+${data.generator && data.generator !== 'Unknown' && data.generator !== 'Real Photo' ? '<div style="font-size:0.85rem;color:#7e6baa;margin-bottom:1rem">Likely generator: <strong>' + data.generator + '</strong></div>' : ''}
 <table>
 <tr><th>Signal</th><th>Score</th><th>Interpretation</th></tr>
 <tr><td>Gemini Vision</td><td>${Math.round(data.gemini_score*100)}%</td><td>${data.gemini_score >= 0.65 ? 'Suspicious' : data.gemini_score <= 0.35 ? 'Looks real' : 'Uncertain'}</td></tr>
@@ -1076,16 +1048,15 @@ ${data.generator && data.generator !== 'Unknown' && data.generator !== 'Real Pho
 <tr><td>Filename</td><td>${Math.round(data.fname_score*100)}%</td><td>${data.fname_note}</td></tr>
 </table>
 <div class="reason"><strong>Gemini Analysis:</strong><br>${data.reason}</div>
-<div class="footer">LuminaCheck AI &nbsp;·&nbsp; Powered by Gemini 2.5 Flash + Hybrid Signal Fusion &nbsp;·&nbsp; Results are probabilistic and should not be used as sole evidence.</div>
+<div class="footer">LuminaCheck AI · Powered by Gemini 1.5 Flash + Hybrid Signal Fusion · Results are probabilistic and should not be used as sole evidence.</div>
 </body></html>`;
     const a = document.createElement('a');
     a.href = 'data:text/html;charset=utf-8,' + encodeURIComponent(html);
-    a.download = 'luminacheck_report_' + (data.filename || 'image').replace(/\.[^.]+$/, '') + '.html';
+    a.download = 'luminacheck_report_' + (data.filename || 'image').replace(/\\.[^.]+$/, '') + '.html';
     a.click();
   };
 
   window.resetToUpload = function() {
-    // Set ?reset=1 so Streamlit picks it up on next rerun and clears state
     window.parent.location.href = window.parent.location.pathname + '?reset=1';
   };
 })();
