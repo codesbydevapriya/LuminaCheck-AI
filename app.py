@@ -27,7 +27,26 @@ st.markdown("""
 #MainMenu, header, footer, .stDeployButton { display: none !important; }
 .block-container { padding: 0 !important; max-width: 100% !important; }
 .stApp { background: #0c0c10; }
-[data-testid="stFileUploader"] { display: none !important; }
+
+/* The real Streamlit uploader sits invisibly over the whole page in upload phase */
+[data-testid="stFileUploader"] {
+    position: fixed !important;
+    top: 0 !important; left: 0 !important;
+    width: 100vw !important; height: 100vh !important;
+    z-index: 9999 !important;
+    opacity: 0 !important;
+    cursor: pointer !important;
+    pointer-events: all !important;
+}
+[data-testid="stFileUploader"] section,
+[data-testid="stFileUploader"] section > div,
+[data-testid="stFileUploader"] label {
+    width: 100% !important; height: 100% !important;
+    min-height: 100vh !important; cursor: pointer !important;
+}
+[data-testid="stFileUploader"] input[type="file"] {
+    width: 100vw !important; height: 100vh !important; cursor: pointer !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -381,6 +400,16 @@ if st.session_state.ui_phase == "analyzing":
         st.session_state.ready_to_analyze = False
         st.rerun()
 
+# ─── HIDE UPLOADER OVERLAY DURING NON-UPLOAD PHASES ──────────────────────────
+# Inject a body class so the transparent overlay is removed when not needed
+_phase = st.session_state.ui_phase
+if _phase in ("analyzing", "results", "uploading"):
+    st.markdown(f"""
+<style>
+[data-testid="stFileUploader"] {{ display: none !important; }}
+</style>
+""", unsafe_allow_html=True)
+
 # ─── GENERATE PHASE DATA ────────────────────────────────────────────────────────
 phase_data = {"phase": st.session_state.ui_phase}
 
@@ -709,23 +738,12 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
   const histDivider   = document.getElementById('histDivider');
   const historyWrap   = document.getElementById('historyWrap');
 
-  dropZone.addEventListener('click', () => {
-    const fu = window.parent.document.querySelector('[data-testid="stFileUploader"] input[type="file"]');
-    if (fu) fu.click();
-  });
+  // The real Streamlit file uploader is a transparent overlay on the parent page.
+  // Clicking anywhere on the page (outside the iframe) triggers it directly.
+  // The drop zone is purely decorative UI — no JS click forwarding needed.
   dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag'); });
   dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag'));
-  dropZone.addEventListener('drop', e => {
-    e.preventDefault();
-    dropZone.classList.remove('drag');
-    const fu = window.parent.document.querySelector('[data-testid="stFileUploader"] input[type="file"]');
-    if (fu && e.dataTransfer.files.length) {
-      const dt = new DataTransfer();
-      dt.items.add(e.dataTransfer.files[0]);
-      fu.files = dt.files;
-      fu.dispatchEvent(new Event('change', { bubbles: true }));
-    }
-  });
+  dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('drag'); });
 
   if (phase === 'upload') {
     dropZone.style.display = 'block';
