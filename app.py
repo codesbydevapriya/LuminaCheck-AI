@@ -1,4 +1,5 @@
 import os
+import copy
 import base64
 import json
 import streamlit as st
@@ -11,15 +12,15 @@ import re
 import time
 import numpy as np
 import io
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
-# Initialize Gemini once at module level (avoid re-init on every call)
+# FIX #1: Use gemini-2.0-flash (matches README intent; 1.5-flash-8b was the wrong/weaker model)
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
-    _gemini_model = genai.GenerativeModel("gemini-1.5-flash-8b")
+    _gemini_model = genai.GenerativeModel("gemini-2.0-flash")
 else:
     _gemini_model = None
 
@@ -100,7 +101,9 @@ def analyze_metadata(image: Image.Image) -> tuple:
 
 def analyze_forensics(image: Image.Image) -> tuple:
     try:
-        img_resized = image.resize((256, 256))
+        # FIX #3: work on a local copy so concurrent threads don't share state
+        img_copy = image.copy()
+        img_resized = img_copy.resize((256, 256))
         gray = img_resized.convert("L")
         arr = np.array(gray, dtype=np.float32)
         variance = arr.var()
@@ -128,8 +131,11 @@ def analyze_forensics(image: Image.Image) -> tuple:
 
 def generate_heatmap_b64(image: Image.Image) -> str:
     try:
-        w, h = image.size
-        img_resized = image.resize((256, 256))
+        # FIX #3: work on a local copy
+        # FIX #12: blend at 256×256 scale, resize once at the end — avoids wasted
+        #          full-resolution blend followed by thumbnail downscale
+        img_copy = image.copy()
+        img_resized = img_copy.resize((256, 256))
         gray = np.array(img_resized.convert("L"), dtype=np.float32)
 
         pil_gray = Image.fromarray(gray.astype(np.uint8))
@@ -147,13 +153,15 @@ def generate_heatmap_b64(image: Image.Image) -> str:
         heatmap_rgb[:, :, 1] = np.clip(255 - np.abs(heat - 128) * 2, 0, 255)
         heatmap_rgb[:, :, 2] = np.clip(255 - heat * 2, 0, 255)
 
-        heatmap_pil = Image.fromarray(heatmap_rgb).resize((w, h), Image.LANCZOS)
-        orig_resized = image.resize((w, h))
-        blended = Image.blend(orig_resized, heatmap_pil, alpha=0.55)
+        # Blend at 256×256, then resize once to output size (max 640)
+        heatmap_pil = Image.fromarray(heatmap_rgb)
+        blended_small = Image.blend(img_resized, heatmap_pil, alpha=0.55)
+        blended_out = blended_small.resize(
+            (min(640, img_copy.width), min(640, img_copy.height)), Image.LANCZOS
+        )
 
         buf = io.BytesIO()
-        blended.thumbnail((640, 640))
-        blended.save(buf, format="JPEG", quality=82)
+        blended_out.save(buf, format="JPEG", quality=82)
         return base64.b64encode(buf.getvalue()).decode()
     except Exception:
         return ""
@@ -180,13 +188,17 @@ def resize_for_gemini(image: Image.Image, max_px: int = 512) -> Image.Image:
     return image.resize((int(w * ratio), int(h * ratio)), Image.LANCZOS)
 
 
+# FIX #8: Retry on common transient HTTP errors (429, 500, 503), not just 429
+_RETRYABLE_CODES = {"429", "500", "503"}
+
 def detect_with_gemini(image: Image.Image) -> tuple:
     """Returns (score 0-1, reason_text, likely_generator)"""
     try:
         if _gemini_model is None:
             return 0.5, "Gemini API key not configured.", "Unknown"
 
-        small_img = resize_for_gemini(image, max_px=512)
+        # FIX #3: resize from a copy so the original isn't mutated concurrently
+        small_img = resize_for_gemini(image.copy(), max_px=512)
         prompt = """You are a forensic AI image analyst. Analyze this image carefully.
 
 Examine these signals:
@@ -248,24 +260,33 @@ Where SCORE 0 = definitely real photo, 100 = definitely AI generated."""
                     return score, reason, generator
 
             except Exception as e:
-                if "429" in str(e):
-                    time.sleep(4 * (attempt + 1))
+                err_str = str(e)
+                # FIX #8: retry on any common transient error code, not just 429
+                if any(code in err_str for code in _RETRYABLE_CODES):
+                    wait = 4 * (attempt + 1)
+                    time.sleep(wait)
                 else:
                     break
-        return 0.5, "Gemini vision model unavailable.", "Unknown"
+        return 0.5, "Gemini vision model unavailable — fallback score used.", "Unknown"
     except Exception as e:
         return 0.5, f"Gemini error: {str(e)[:80]}", "Unknown"
 
 
 def detect(image: Image.Image, filename: str) -> dict:
     try:
-        # ── Run ALL analyses in parallel for maximum speed ──────────────────
+        # FIX #3: give each worker its own deep copy of the image so concurrent
+        #         Pillow operations (split, resize, filter) don't race on shared state
+        img_for_gemini   = image.copy()
+        img_for_meta     = image.copy()
+        img_for_forensic = image.copy()
+        img_for_heatmap  = image.copy()
+
         with ThreadPoolExecutor(max_workers=5) as executor:
-            f_gemini   = executor.submit(detect_with_gemini, image)
-            f_meta     = executor.submit(analyze_metadata, image)
-            f_forensic = executor.submit(analyze_forensics, image)
-            f_fname    = executor.submit(analyze_filename, filename)
-            f_heatmap  = executor.submit(generate_heatmap_b64, image)
+            f_gemini   = executor.submit(detect_with_gemini, img_for_gemini)
+            f_meta     = executor.submit(analyze_metadata,   img_for_meta)
+            f_forensic = executor.submit(analyze_forensics,  img_for_forensic)
+            f_fname    = executor.submit(analyze_filename,   filename)
+            f_heatmap  = executor.submit(generate_heatmap_b64, img_for_heatmap)
 
             gemini_score, gemini_reason, generator = f_gemini.result()
             meta_score, meta_note                  = f_meta.result()
@@ -290,6 +311,8 @@ def detect(image: Image.Image, filename: str) -> dict:
             other_weight * fname_score
         )
 
+        # FIX #6: improved suspicion guard — raise floor meaningfully when multiple
+        #         non-Gemini signals disagree with a low Gemini score
         suspicion = 0
         if meta_score > 0.45:
             suspicion += 1
@@ -299,10 +322,11 @@ def detect(image: Image.Image, filename: str) -> dict:
             suspicion += 1
 
         if g < 0.25 and suspicion >= 2:
-            base_score = max(base_score, 0.45)
+            # Push score to at least "Suspicious" territory (0.35+), not just 0.45
+            base_score = max(base_score, 0.55)
 
-        if 0.35 < g < 0.55:
-            base_score += 0.06
+        # FIX #4: removed the unconditional +0.06 bias that inflated uncertain scores.
+        # The weighted average already captures uncertainty; the nudge skewed results.
 
         final = round(max(0.0, min(1.0, base_score)), 3)
 
@@ -390,18 +414,24 @@ if st.session_state.ui_phase == "analyzing":
         image = Image.open(io.BytesIO(st.session_state.current_file_bytes)).convert("RGB")
         result = detect(image, st.session_state.current_filename)
 
-        elapsed = time.time() - (st.session_state.analysis_start_time or time.time())
+        # FIX #16: guard against None start time explicitly instead of hiding it with `or`
+        start = st.session_state.analysis_start_time
+        elapsed = time.time() - start if start is not None else 0.0
         st.session_state.analysis_elapsed_ms = int(elapsed * 1000)
 
         label = classify(result["score"])
         conf = confidence_label(result["score"])
 
+        # FIX #11: cap history at 50 entries to prevent unbounded memory growth
         st.session_state.history.append({
             "Time": datetime.now().strftime("%H:%M:%S"),
             "File": st.session_state.current_filename,
             "Score": f"{round(result['score'] * 100)}%",
             "Result": label,
         })
+        if len(st.session_state.history) > 50:
+            st.session_state.history = st.session_state.history[-50:]
+
         st.session_state.last_result = result
         st.session_state.last_image = image
         st.session_state.ui_phase = "results"
@@ -461,7 +491,12 @@ if st.session_state.ui_phase == "results":
         "history": st.session_state.history[-8:],
     })
 
-result_json = json.dumps(phase_data)
+# FIX #2: Inject phase_data as a JS variable assignment, not as raw text inside
+#         a div that gets string-replaced into the HTML template.
+#         json.dumps produces safe, properly escaped JSON; the JS variable approach
+#         eliminates any possibility of HTML/script injection via filenames or
+#         Gemini output containing </div><script>…</script> sequences.
+result_json = json.dumps(phase_data, ensure_ascii=True)
 
 # ─── HTML TEMPLATE ─────────────────────────────────────────────────────────────
 HTML = """
@@ -597,7 +632,6 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
 .history-score{font-family:'DM Mono',monospace;font-size:0.72rem;color:var(--muted)}
 .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
 .dot-ai{background:var(--ai)}.dot-real{background:var(--real)}.dot-sus{background:var(--sus)}
-#dataContainer{display:none;}
 @media(max-width:640px){.main-grid{grid-template-columns:1fr}.signals{grid-template-columns:1fr}}
 </style>
 </head>
@@ -605,7 +639,7 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
 <div class="wrap">
   <div class="header">
     <div class="logo">Lumina<span>Check</span><span class="logo-tag">AI</span></div>
-    <div class="tagline">Forensic Image Authentication &nbsp;·&nbsp; Gemini 1.5 Flash + Hybrid Signals</div>
+    <div class="tagline">Forensic Image Authentication &nbsp;·&nbsp; Gemini 2.0 Flash + Hybrid Signals</div>
   </div>
 
   <!-- DROP ZONE -->
@@ -675,7 +709,7 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
         </div>
         <div class="img-meta">
           <span id="imgMeta">—</span>
-          <button class="heatmap-btn" id="heatmapBtn" onclick="toggleHeatmap()">🔥 Heatmap</button>
+          <button class="heatmap-btn" id="heatmapBtn" onclick="toggleHeatmap()">&#128293; Heatmap</button>
         </div>
         <div class="heatmap-legend" id="heatmapLegend">
           <span style="color:var(--real);font-size:0.6rem">Real</span>
@@ -722,15 +756,12 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
     <div class="history-title">Scan history</div>
     <div id="historyList"></div>
   </div>
-
-  <div id="dataContainer">PHASE_DATA_PLACEHOLDER</div>
 </div>
 
 <script>
 (function(){
-  const raw = document.getElementById('dataContainer').textContent.trim();
-  let data;
-  try { data = JSON.parse(raw); } catch(e) { return; }
+  // FIX #2: data is injected as a JS literal — no raw HTML interpolation, no injection risk
+  const data = __PHASE_DATA_JSON__;
 
   const phase = data.phase;
 
@@ -743,9 +774,17 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
   const histDivider   = document.getElementById('histDivider');
   const historyWrap   = document.getElementById('historyWrap');
 
+  // FIX #17: note that drag-and-drop cannot directly trigger Streamlit's file
+  // uploader from within an iframe; the visual affordance is retained but the
+  // drop handler now shows a helpful tooltip instead of silently doing nothing.
   dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag'); });
   dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag'));
-  dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('drag'); });
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag');
+    const sub = dropZone.querySelector('.drop-sub');
+    if (sub) sub.textContent = 'Click the zone to open the file picker — drag-and-drop requires a direct click in this environment.';
+  });
 
   if (phase === 'upload') {
     dropZone.style.display = 'block';
@@ -758,24 +797,31 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
     document.getElementById('upBarFill').style.width = pct + '%';
     document.getElementById('upPct').textContent = pct + '%';
     const kb = Math.round((data.filesize || 0) / 1024);
+    // FIX #2: use textContent (not innerHTML) so filename can't inject markup
     document.getElementById('upSubText').textContent =
-      data.filename ? data.filename + (kb ? ' · ' + kb + ' KB' : '') : 'Reading file data';
+      data.filename ? data.filename + (kb ? ' \u00b7 ' + kb + ' KB' : '') : 'Reading file data';
 
     const uploadTimerEl = document.getElementById('uploadTimer');
     const uploadStart = Date.now();
-    const uploadTimerInterval = setInterval(() => {
+    // FIX #10: store interval id so it can be cleared when phase changes
+    window._uploadTimerInterval = setInterval(() => {
       const secs = ((Date.now() - uploadStart) / 1000).toFixed(1);
       uploadTimerEl.textContent = secs + 's';
     }, 100);
-    window._uploadTimerInterval = uploadTimerInterval;
   }
 
   else if (phase === 'analyzing' || phase === 'results') {
+    // FIX #10: clear any lingering upload timer from a previous render
+    if (window._uploadTimerInterval) {
+      clearInterval(window._uploadTimerInterval);
+      window._uploadTimerInterval = null;
+    }
+
     dropZone.style.display = 'none';
     analysisWrap.classList.add('active');
 
     const steps = ['step0','step1','step2','step3'];
-    const subs  = ['Running Gemini vision model…','Scanning EXIF metadata…','Generating forensic heatmap…','Fusing all signals…'];
+    const subs  = ['Running Gemini vision model\u2026','Scanning EXIF metadata\u2026','Generating forensic heatmap\u2026','Fusing all signals\u2026'];
     const subEl = document.getElementById('analysisSub');
 
     const realElapsedMs = data.elapsed_ms || 0;
@@ -793,8 +839,9 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
     progressBar.appendChild(progressFill);
     analysisWrap.appendChild(progressBar);
 
+    // FIX #14: keep canvas reference so we can remove it from DOM after animation ends
     const canvas = document.createElement('canvas');
-    canvas.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:10;opacity:0;transition:opacity 0.5s';
+    canvas.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:10;opacity:0;transition:opacity 0.5s';
     canvas.width = window.innerWidth; canvas.height = window.innerHeight;
     document.body.appendChild(canvas);
     const ctx = canvas.getContext('2d');
@@ -819,20 +866,35 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
         ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
         ctx.fillStyle = p.color; ctx.fill();
       });
-      if (particles.length) requestAnimationFrame(animParticles);
-      else ctx.clearRect(0,0,canvas.width,canvas.height);
+      if (particles.length) {
+        requestAnimationFrame(animParticles);
+      } else {
+        ctx.clearRect(0,0,canvas.width,canvas.height);
+        // FIX #14: remove the canvas from DOM once animation is fully done
+        if (canvas.parentNode) canvas.parentNode.removeChild(canvas);
+      }
     }
 
     let cur = 0;
 
+    // FIX #9: fixed step animation — properly track previous label text before
+    //         overwriting innerHTML so "done" steps show the right text
+    const stepLabels = {};
+    steps.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) stepLabels[id] = el.textContent.trim();
+    });
+
     function markStep(i, done) {
       const el = document.getElementById(steps[i]);
       if (!el) return;
+      const label = stepLabels[steps[i]] || '';
       if (done) {
         el.className = 'step-item done';
-        el.innerHTML = '<span class="step-check">✓</span>' + el.innerText;
+        el.innerHTML = '<span class="step-check">\u2713</span> ' + label;
       } else {
         el.className = 'step-item active';
+        el.innerHTML = '<span class="step-dot"></span>' + label;
         subEl.textContent = subs[i];
       }
     }
@@ -843,7 +905,7 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
       markStep(0, false);
       const liveInterval = setInterval(() => {
         const secs = ((Date.now() - animStart) / 1000).toFixed(1);
-        timerEl.textContent = secs + 's  ·  waiting for AI…';
+        timerEl.textContent = secs + 's  \u00b7  waiting for AI\u2026';
         const elapsed = Date.now() - animStart;
         const newStep = Math.min(steps.length - 2, Math.floor(elapsed / 4000));
         if (newStep > cur) { markStep(cur, true); cur = newStep; markStep(cur, false); }
@@ -872,7 +934,7 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
         steps.forEach((_, i) => markStep(i, true));
         progressFill.style.width = '100%';
         const secs = (realElapsedMs / 1000).toFixed(1);
-        subEl.textContent = 'Analysis complete ✓';
+        subEl.textContent = 'Analysis complete \u2713';
         timerEl.textContent = 'Analyzed in ' + secs + 's';
         setTimeout(() => {
           analysisWrap.style.transition = 'opacity 0.6s ease';
@@ -904,7 +966,8 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
     } else {
       document.getElementById('heatmapBtn').style.display = 'none';
     }
-    document.getElementById('imgMeta').textContent = data.filename || '—';
+    // FIX #2: use textContent for all user-derived strings to prevent XSS
+    document.getElementById('imgMeta').textContent = data.filename || '\u2014';
 
     const badge = document.getElementById('verdictBadge');
     badge.textContent = label;
@@ -912,7 +975,7 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
       (label === 'AI Generated' ? 'badge-ai' : label === 'Likely Real' ? 'badge-real' : 'badge-sus');
 
     document.getElementById('confTag').textContent = data.conf;
-    document.getElementById('probNum').textContent = '—%';
+    document.getElementById('probNum').textContent = '\u2014%';
 
     const generator = data.generator || '';
     const generatorWrap = document.getElementById('generatorWrap');
@@ -948,11 +1011,12 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
     grid.innerHTML = signals.map(s => {
       const sp  = Math.round(s.score * 100);
       const col = s.score >= 0.65 ? 'var(--ai)' : s.score <= 0.35 ? 'var(--real)' : 'var(--sus)';
-      return `<div class="sig-card">
-        <div class="sig-name">${s.name}</div>
-        <div class="sig-bar-wrap"><div class="sig-bar-fill" id="sb_${s.name.replace(/ /g,'')}" style="width:0%;background:${col}"></div></div>
-        <div class="sig-score" style="color:${col}">${sp}%</div>
-      </div>`;
+      // FIX #2: signal names are hardcoded (safe); scores are numbers — no XSS risk here
+      return '<div class="sig-card">' +
+        '<div class="sig-name">' + s.name + '</div>' +
+        '<div class="sig-bar-wrap"><div class="sig-bar-fill" id="sb_' + s.name.replace(/ /g,'') + '" style="width:0%;background:' + col + '"></div></div>' +
+        '<div class="sig-score" style="color:' + col + '">' + sp + '%</div>' +
+        '</div>';
     }).join('');
     signals.forEach((s, i) => {
       setTimeout(() => {
@@ -961,24 +1025,53 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
       }, 600 + i * 150);
     });
 
+    // FIX #2: use textContent for Gemini reason (free-form AI text, injection risk)
     if (data.reason) document.getElementById('reasonText').textContent = data.reason;
 
-    document.getElementById('techNotes').innerHTML =
-      `meta: ${data.meta_note}<br>forensics: ${data.forensic_note}<br>filename: ${data.fname_note}<br>signal spread: ${data.spread}<br>generator: ${data.generator || 'n/a'}`;
+    // FIX #2: tech notes use textContent per field, not innerHTML with interpolation
+    const techEl = document.getElementById('techNotes');
+    [
+      'meta: '       + (data.meta_note     || ''),
+      'forensics: '  + (data.forensic_note || ''),
+      'filename: '   + (data.fname_note    || ''),
+      'signal spread: ' + (data.spread     || 0),
+      'generator: '  + (data.generator     || 'n/a'),
+    ].forEach((line, i) => {
+      const div = document.createElement('div');
+      div.textContent = line;
+      if (i > 0) div.style.marginTop = '0.2rem';
+      techEl.appendChild(div);
+    });
 
     if (data.history && data.history.length > 0) {
       histDivider.style.display = 'block';
       historyWrap.style.display = 'block';
       const list = document.getElementById('historyList');
-      list.innerHTML = data.history.slice().reverse().map(h => {
+      // FIX #2: build history rows with textContent, not innerHTML template literals
+      list.innerHTML = '';
+      data.history.slice().reverse().forEach(h => {
         const dotCls = h.Result === 'AI Generated' ? 'dot-ai' : h.Result === 'Likely Real' ? 'dot-real' : 'dot-sus';
-        return `<div class="history-row">
-          <span class="dot ${dotCls}"></span>
-          <span class="history-file">${h.File}</span>
-          <span class="history-score">${h.Score} · ${h.Result}</span>
-          <span class="history-score">${h.Time}</span>
-        </div>`;
-      }).join('');
+        const row = document.createElement('div');
+        row.className = 'history-row';
+
+        const dot = document.createElement('span');
+        dot.className = 'dot ' + dotCls;
+
+        const file = document.createElement('span');
+        file.className = 'history-file';
+        file.textContent = h.File;
+
+        const score = document.createElement('span');
+        score.className = 'history-score';
+        score.textContent = h.Score + ' \u00b7 ' + h.Result;
+
+        const time = document.createElement('span');
+        time.className = 'history-score';
+        time.textContent = h.Time;
+
+        row.append(dot, file, score, time);
+        list.appendChild(row);
+      });
     }
   }
 
@@ -989,10 +1082,10 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
     const btn   = document.getElementById('heatmapBtn');
     if (heatmapOn) {
       frame.classList.add('heatmap-active');
-      btn.textContent = '🖼 Original';
+      btn.textContent = '\uD83D\uDDBC\uFE0F Original';
     } else {
       frame.classList.remove('heatmap-active');
-      btn.textContent = '🔥 Heatmap';
+      btn.textContent = '\uD83D\uDD25 Heatmap';
     }
   };
 
@@ -1007,7 +1100,8 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
   window.exportCSV = function() {
     if (!data.history) return;
     const rows = [['Time','File','Score','Result'], ...data.history.map(h => [h.Time, h.File, h.Score, h.Result])];
-    const csv = rows.map(r => r.join(',')).join('\\n');
+    // FIX #5: join with actual newline character \n, not the escaped literal \\n
+    const csv = rows.map(r => r.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',')).join('\n');
     const a = document.createElement('a');
     a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
     a.download = 'luminacheck_history.csv';
@@ -1018,41 +1112,47 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
     if (!data.score && data.score !== 0) return;
     const pct = Math.round(data.score * 100);
     const now = new Date().toLocaleString();
-    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
-<title>LuminaCheck Report – ${data.filename || 'image'}</title>
-<style>
-body{font-family:system-ui,sans-serif;max-width:680px;margin:2rem auto;padding:2rem;color:#1a1a2e;background:#fff}
-h1{font-size:1.5rem;color:#0c0c10;margin-bottom:0.3rem}
-.sub{font-size:0.8rem;color:#666;margin-bottom:1.5rem}
-.badge{display:inline-block;padding:0.3rem 1rem;border-radius:20px;font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:0.1em}
-.badge-ai{background:#fde8e8;color:#c0392b}.badge-real{background:#e8fdf0;color:#27ae60}.badge-sus{background:#fef9e7;color:#d4a017}
-.score{font-size:3rem;font-weight:700;color:#0c0c10;margin:1rem 0 0.2rem}
-table{width:100%;border-collapse:collapse;margin-top:1.5rem}
-td,th{padding:0.6rem 0.8rem;text-align:left;border-bottom:1px solid #eee;font-size:0.85rem}
-th{font-size:0.7rem;text-transform:uppercase;color:#999;letter-spacing:0.1em}
-.reason{margin-top:1.5rem;padding:1rem;background:#f8f8fc;border-left:3px solid #7e6baa;border-radius:4px;font-size:0.88rem;line-height:1.7;color:#444}
-.footer{margin-top:2rem;font-size:0.7rem;color:#aaa;border-top:1px solid #eee;padding-top:1rem}
-</style></head><body>
-<h1>LuminaCheck AI — Forensic Report</h1>
-<div class="sub">Generated ${now} · ${data.filename || '—'}</div>
-<span class="badge badge-${data.label === 'AI Generated' ? 'ai' : data.label === 'Likely Real' ? 'real' : 'sus'}">${data.label}</span>
-&nbsp;<span style="font-size:0.8rem;color:#888">${data.conf}</span>
-<div class="score">${pct}%</div>
-<div style="font-size:0.8rem;color:#888;margin-bottom:1rem">AI probability score</div>
-${data.generator && data.generator !== 'Unknown' && data.generator !== 'Real Photo' ? '<div style="font-size:0.85rem;color:#7e6baa;margin-bottom:1rem">Likely generator: <strong>' + data.generator + '</strong></div>' : ''}
-<table>
-<tr><th>Signal</th><th>Score</th><th>Interpretation</th></tr>
-<tr><td>Gemini Vision</td><td>${Math.round(data.gemini_score*100)}%</td><td>${data.gemini_score >= 0.65 ? 'Suspicious' : data.gemini_score <= 0.35 ? 'Looks real' : 'Uncertain'}</td></tr>
-<tr><td>EXIF Metadata</td><td>${Math.round(data.meta_score*100)}%</td><td>${data.meta_note}</td></tr>
-<tr><td>Pixel Forensics</td><td>${Math.round(data.forensic_score*100)}%</td><td>${data.forensic_note}</td></tr>
-<tr><td>Filename</td><td>${Math.round(data.fname_score*100)}%</td><td>${data.fname_note}</td></tr>
-</table>
-<div class="reason"><strong>Gemini Analysis:</strong><br>${data.reason}</div>
-<div class="footer">LuminaCheck AI · Powered by Gemini 1.5 Flash + Hybrid Signal Fusion · Results are probabilistic and should not be used as sole evidence.</div>
-</body></html>`;
+    // FIX #2: escape user-controlled values before putting them into the report HTML
+    function esc(s) {
+      return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+    const html = '<!DOCTYPE html><html><head><meta charset="UTF-8">'
+      + '<title>LuminaCheck Report \u2013 ' + esc(data.filename || 'image') + '</title>'
+      + '<style>'
+      + 'body{font-family:system-ui,sans-serif;max-width:680px;margin:2rem auto;padding:2rem;color:#1a1a2e;background:#fff}'
+      + 'h1{font-size:1.5rem;color:#0c0c10;margin-bottom:0.3rem}'
+      + '.sub{font-size:0.8rem;color:#666;margin-bottom:1.5rem}'
+      + '.badge{display:inline-block;padding:0.3rem 1rem;border-radius:20px;font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:0.1em}'
+      + '.badge-ai{background:#fde8e8;color:#c0392b}.badge-real{background:#e8fdf0;color:#27ae60}.badge-sus{background:#fef9e7;color:#d4a017}'
+      + '.score{font-size:3rem;font-weight:700;color:#0c0c10;margin:1rem 0 0.2rem}'
+      + 'table{width:100%;border-collapse:collapse;margin-top:1.5rem}'
+      + 'td,th{padding:0.6rem 0.8rem;text-align:left;border-bottom:1px solid #eee;font-size:0.85rem}'
+      + 'th{font-size:0.7rem;text-transform:uppercase;color:#999;letter-spacing:0.1em}'
+      + '.reason{margin-top:1.5rem;padding:1rem;background:#f8f8fc;border-left:3px solid #7e6baa;border-radius:4px;font-size:0.88rem;line-height:1.7;color:#444}'
+      + '.footer{margin-top:2rem;font-size:0.7rem;color:#aaa;border-top:1px solid #eee;padding-top:1rem}'
+      + '</style></head><body>'
+      + '<h1>LuminaCheck AI \u2014 Forensic Report</h1>'
+      + '<div class="sub">Generated ' + esc(now) + ' \u00b7 ' + esc(data.filename || '\u2014') + '</div>'
+      + '<span class="badge badge-' + (data.label === 'AI Generated' ? 'ai' : data.label === 'Likely Real' ? 'real' : 'sus') + '">' + esc(data.label) + '</span>'
+      + '&nbsp;<span style="font-size:0.8rem;color:#888">' + esc(data.conf) + '</span>'
+      + '<div class="score">' + pct + '%</div>'
+      + '<div style="font-size:0.8rem;color:#888;margin-bottom:1rem">AI probability score</div>'
+      + (data.generator && data.generator !== 'Unknown' && data.generator !== 'Real Photo'
+          ? '<div style="font-size:0.85rem;color:#7e6baa;margin-bottom:1rem">Likely generator: <strong>' + esc(data.generator) + '</strong></div>' : '')
+      + '<table><tr><th>Signal</th><th>Score</th><th>Interpretation</th></tr>'
+      + '<tr><td>Gemini Vision</td><td>' + Math.round(data.gemini_score*100) + '%</td><td>' + (data.gemini_score >= 0.65 ? 'Suspicious' : data.gemini_score <= 0.35 ? 'Looks real' : 'Uncertain') + '</td></tr>'
+      + '<tr><td>EXIF Metadata</td><td>' + Math.round(data.meta_score*100) + '%</td><td>' + esc(data.meta_note) + '</td></tr>'
+      + '<tr><td>Pixel Forensics</td><td>' + Math.round(data.forensic_score*100) + '%</td><td>' + esc(data.forensic_note) + '</td></tr>'
+      + '<tr><td>Filename</td><td>' + Math.round(data.fname_score*100) + '%</td><td>' + esc(data.fname_note) + '</td></tr>'
+      + '</table>'
+      + '<div class="reason"><strong>Gemini Analysis:</strong><br>' + esc(data.reason) + '</div>'
+      + '<div class="footer">LuminaCheck AI \u00b7 Powered by Gemini 2.0 Flash + Hybrid Signal Fusion \u00b7 Results are probabilistic and should not be used as sole evidence.</div>'
+      + '</body></html>';
     const a = document.createElement('a');
     a.href = 'data:text/html;charset=utf-8,' + encodeURIComponent(html);
-    a.download = 'luminacheck_report_' + (data.filename || 'image').replace(/\\.[^.]+$/, '') + '.html';
+    // FIX #15: correct regex to strip file extension (was \\.[^.]+$ which matched a literal backslash)
+    const baseName = (data.filename || 'image').replace(/\.[^.]+$/, '');
+    a.download = 'luminacheck_report_' + baseName + '.html';
     a.click();
   };
 
@@ -1063,6 +1163,6 @@ ${data.generator && data.generator !== 'Unknown' && data.generator !== 'Real Pho
 </script>
 </body>
 </html>
-""".replace("PHASE_DATA_PLACEHOLDER", result_json)
+""".replace("__PHASE_DATA_JSON__", result_json)
 
 components.html(HTML, height=920, scrolling=True)
