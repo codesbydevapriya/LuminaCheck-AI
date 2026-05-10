@@ -11,6 +11,7 @@ import re
 import time
 import numpy as np
 import io
+import threading
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
@@ -62,6 +63,8 @@ for key, default in {
     "ready_to_analyze": False,
     "analysis_start_time": None,
     "analysis_elapsed_ms": 0,
+    "_bg_result": None,
+    "_bg_running": False,
 }.items():
     if key not in st.session_state:
         st.session_state[key] = default
@@ -366,39 +369,63 @@ uploaded_file = st.file_uploader(
     label_visibility="collapsed", key="img_upload"
 )
 
-# Accept new upload from EITHER "upload" or "results" phase
+# PHASE 1: file just dropped → store bytes, show analyzing screen immediately
 if uploaded_file is not None and st.session_state.ui_phase in ("upload", "results"):
     file_bytes = uploaded_file.read()
-    # Skip the intermediate "uploading" and "analyzing" states entirely.
-    # Read the file, run analysis immediately, and jump straight to results.
-    # This removes 2 wasted st.rerun() round-trips that caused visible lag.
-    st.session_state.current_filename = uploaded_file.name
-    st.session_state.analysis_start_time = time.time()
-    st.session_state.ui_phase = "analyzing"
-
     image = Image.open(io.BytesIO(file_bytes)).convert("RGB")
-    result = detect(image, st.session_state.current_filename)
-
-    elapsed = time.time() - st.session_state.analysis_start_time
-    st.session_state.analysis_elapsed_ms = int(elapsed * 1000)
-
-    label = classify(result["score"])
-    st.session_state.history.append({
-        "Time": datetime.now().strftime("%H:%M:%S"),
-        "File": st.session_state.current_filename,
-        "Score": f"{round(result['score'] * 100)}%",
-        "Result": label,
-    })
-    st.session_state.last_result = result
-    # Store a small thumbnail instead of raw bytes to reduce session state size
     buf = io.BytesIO()
     thumb = image.copy()
     thumb.thumbnail((800, 800))
-    thumb.save(buf, format="JPEG", quality=85)
+    thumb.save(buf, format="JPEG", quality=82)
     st.session_state.current_file_bytes = buf.getvalue()
-    st.session_state.ui_phase = "results"
-    st.session_state.ready_to_analyze = False
-    st.rerun()
+    st.session_state.current_filename = uploaded_file.name
+    st.session_state.analysis_start_time = time.time()
+    st.session_state.ui_phase = "analyzing"
+    st.session_state.ready_to_analyze = True
+    st.session_state._bg_result = None   # clear any previous background result
+    st.rerun()  # fast — just shows the spinner
+
+# PHASE 2: analyzing screen visible → kick off background thread if not started
+if st.session_state.ui_phase == "analyzing" and st.session_state.ready_to_analyze:
+    # Only start the thread once
+    if st.session_state.get("_bg_result") is None and not st.session_state.get("_bg_running"):
+        st.session_state._bg_running = True
+
+        def _run_detect():
+            try:
+                img = Image.open(io.BytesIO(st.session_state.current_file_bytes)).convert("RGB")
+                res = detect(img, st.session_state.current_filename)
+                st.session_state._bg_result = res
+            except Exception as e:
+                st.session_state._bg_result = {"error": str(e)}
+            finally:
+                st.session_state._bg_running = False
+
+        t = threading.Thread(target=_run_detect, daemon=True)
+        t.start()
+
+    # Poll: if background thread finished, advance to results
+    if st.session_state.get("_bg_result") is not None:
+        result = st.session_state._bg_result
+        elapsed = time.time() - (st.session_state.analysis_start_time or time.time())
+        st.session_state.analysis_elapsed_ms = int(elapsed * 1000)
+        label = classify(result["score"])
+        st.session_state.history.append({
+            "Time": datetime.now().strftime("%H:%M:%S"),
+            "File": st.session_state.current_filename,
+            "Score": f"{round(result['score'] * 100)}%",
+            "Result": label,
+        })
+        st.session_state.last_result = result
+        st.session_state.ui_phase = "results"
+        st.session_state.ready_to_analyze = False
+        st.session_state._bg_result = None
+        st.session_state._bg_running = False
+        st.rerun()
+    else:
+        # Still running — auto-refresh every 1.5s to check if done
+        time.sleep(1.5)
+        st.rerun()
 
 # ─── HIDE UPLOADER OVERLAY DURING NON-UPLOAD PHASES ──────────────────────────
 # Inject a body class so the transparent overlay is removed when not needed
