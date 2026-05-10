@@ -11,21 +11,6 @@ import re
 import time
 import numpy as np
 import io
-import streamlit as st
-import torch
-import torchvision.transforms as transforms
-# 👇 PASTE HERE
-@st.cache_resource
-def load_detector():
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-
-    model = torch.hub.load("pytorch/vision", "resnet18", pretrained=True)
-    model.fc = torch.nn.Linear(model.fc.in_features, 2)
-
-    model.eval()
-    model.to(device)
-
-    return model, device
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
@@ -49,6 +34,8 @@ st.markdown("""
 for key, default in {
     "history": [],
     "last_result": None,
+    "last_image": None,
+    "current_file_bytes": b"",
     "ui_phase": "upload",
     "current_filename": None,
     "upload_progress": 0,
@@ -210,6 +197,9 @@ def detect(image: Image.Image, filename: str) -> dict:
 
         final = round(max(0.0, min(1.0, base_score)), 3)
 
+        scores = [g, meta_score, forensic_score, fname_score]
+        spread_val = round(max(scores) - min(scores), 3)
+
         return {
             "score": final,
             "gemini_score": g,
@@ -220,7 +210,7 @@ def detect(image: Image.Image, filename: str) -> dict:
             "meta_note": meta_note,
             "forensic_note": forensic_note,
             "fname_note": fname_note,
-            "spread": 0
+            "spread": spread_val
         }
 
     except Exception as e:
@@ -299,13 +289,13 @@ if st.session_state.ui_phase == "uploading":
     phase_data.update({
         "filename": st.session_state.current_filename,
         "progress": 80,
-        "filesize": len(st.session_state.get("current_file_bytes", b"")),
+        "filesize": len(getattr(st.session_state, "current_file_bytes", b"")),
     })
 elif st.session_state.ui_phase == "analyzing":
     phase_data["progress"] = 0
 if st.session_state.ui_phase == "results":
     result = st.session_state.last_result
-    image = st.session_state.get("last_image")
+    image = getattr(st.session_state, "last_image", None)
     if image is None:
         image = Image.new("RGB", (100, 100), color=(20, 20, 30))
 
