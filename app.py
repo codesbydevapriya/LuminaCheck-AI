@@ -61,6 +61,8 @@ for key, default in {
     "upload_progress": 0,
     "current_file": None,
     "ready_to_analyze": False,
+    "analysis_start_time": None,
+    "analysis_elapsed_ms": 0,
 }.items():
     if key not in st.session_state:
         st.session_state[key] = default
@@ -379,11 +381,17 @@ if st.session_state.ui_phase == "uploading":
 
 if st.session_state.ui_phase == "analyzing":
     if not st.session_state.ready_to_analyze:
+        # First pass: render the animation, record start time, schedule work
         st.session_state.ready_to_analyze = True
+        st.session_state.analysis_start_time = time.time()
         st.rerun()
     else:
         image = Image.open(io.BytesIO(st.session_state.current_file_bytes)).convert("RGB")
         result = detect(image, st.session_state.current_filename)
+
+        # Record how long the real analysis took (in ms) so JS can sync its timer
+        elapsed = time.time() - (st.session_state.analysis_start_time or time.time())
+        st.session_state.analysis_elapsed_ms = int(elapsed * 1000)
 
         label = classify(result["score"])
         conf = confidence_label(result["score"])
@@ -411,7 +419,7 @@ if _phase in ("analyzing", "results", "uploading"):
 """, unsafe_allow_html=True)
 
 # ─── GENERATE PHASE DATA ────────────────────────────────────────────────────────
-phase_data = {"phase": st.session_state.ui_phase}
+phase_data = {"phase": st.session_state.ui_phase, "elapsed_ms": st.session_state.analysis_elapsed_ms}
 
 if st.session_state.ui_phase == "uploading":
     phase_data.update({
@@ -764,18 +772,30 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
     dropZone.style.display = 'none';
     analysisWrap.classList.add('active');
 
-    const TOTAL_MS = 5000;
-    const steps    = ['step0','step1','step2','step3'];
-    const subs     = ['Running Gemini vision model…','Scanning EXIF metadata…','Generating forensic heatmap…','Fusing all signals…'];
-    const subEl    = document.getElementById('analysisSub');
+    const steps = ['step0','step1','step2','step3'];
+    const subs  = ['Running Gemini vision model…','Scanning EXIF metadata…','Generating forensic heatmap…','Fusing all signals…'];
+    const subEl = document.getElementById('analysisSub');
 
+    // ── Elapsed time display ──────────────────────────────────────────────────
+    // If results are already in (phase === 'results'), we know the real elapsed ms.
+    // If still analyzing, we count up live so the user sees real time passing.
+    const realElapsedMs = data.elapsed_ms || 0;
+    const isResultsReady = (phase === 'results');
+
+    const timerEl = document.createElement('div');
+    timerEl.style.cssText = 'font-family:"DM Mono",monospace;font-size:0.72rem;color:var(--muted);margin:0.6rem auto 0;text-align:center;letter-spacing:0.08em';
+    timerEl.textContent = '0.0s';
+    analysisWrap.appendChild(timerEl);
+
+    // Progress bar — stretches to fill the real analysis duration
     const progressBar = document.createElement('div');
-    progressBar.style.cssText = 'height:3px;border-radius:2px;background:var(--surface2);overflow:hidden;position:relative;max-width:380px;margin:1.2rem auto 0';
+    progressBar.style.cssText = 'height:3px;border-radius:2px;background:var(--surface2);overflow:hidden;position:relative;max-width:380px;margin:0.8rem auto 0';
     const progressFill = document.createElement('div');
     progressFill.style.cssText = 'height:100%;border-radius:2px;background:linear-gradient(90deg,var(--accent),var(--accent2));width:0%;transition:width 0.25s linear';
     progressBar.appendChild(progressFill);
     analysisWrap.appendChild(progressBar);
 
+    // Particle burst
     const canvas = document.createElement('canvas');
     canvas.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:10;opacity:0;transition:opacity 0.5s';
     canvas.width = window.innerWidth; canvas.height = window.innerHeight;
@@ -807,10 +827,13 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
     }
 
     let cur = 0;
-    const stepInterval = TOTAL_MS / steps.length;
+    const stepInterval = isResultsReady
+      ? Math.max(realElapsedMs / steps.length, 800)  // spread steps over real time
+      : 3000;                                          // unknown — slow pulse while waiting
 
     function markStep(i, done) {
       const el = document.getElementById(steps[i]);
+      if (!el) return;
       if (done) {
         el.className = 'step-item done';
         el.innerHTML = '<span class="step-check">✓</span>' + el.innerText;
@@ -820,41 +843,61 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
       }
     }
 
-    const startTime = Date.now();
-    const tickInterval = setInterval(() => {
-      const elapsed = Date.now() - startTime;
-      const pct = Math.min(100, (elapsed / TOTAL_MS) * 100);
-      progressFill.style.width = pct + '%';
-      const newStep = Math.min(steps.length - 1, Math.floor(elapsed / stepInterval));
-      if (newStep > cur) {
-        markStep(cur, true);
-        cur = newStep;
-        markStep(cur, false);
-      }
-    }, 100);
+    // ── Two modes ─────────────────────────────────────────────────────────────
+    // MODE A — "analyzing": results not ready yet. Count up live, loop step 0,
+    //   show a "waiting for AI…" pulsing state until Streamlit reruns with results.
+    // MODE B — "results": real elapsed time known. Play a compressed replay of
+    //   the animation synced to actual time, then crossfade to results.
 
-    markStep(0, false);
+    const animStart = Date.now();
 
-    setTimeout(() => {
-      canvas.style.opacity = '1';
-      spawnParticles(); animParticles();
-    }, 4200);
+    if (!isResultsReady) {
+      // MODE A: live counting, no auto-finish — Streamlit will rerun when done
+      markStep(0, false);
+      const liveInterval = setInterval(() => {
+        const secs = ((Date.now() - animStart) / 1000).toFixed(1);
+        timerEl.textContent = secs + 's  ·  waiting for AI…';
+        const elapsed = Date.now() - animStart;
+        // Slowly advance through steps (never mark all done — results aren't ready)
+        const newStep = Math.min(steps.length - 2, Math.floor(elapsed / 4000));
+        if (newStep > cur) { markStep(cur, true); cur = newStep; markStep(cur, false); }
+        // Progress bar crawls to 90% then stalls — never reaches 100 until results
+        const pct = Math.min(88, (elapsed / 20000) * 100);
+        progressFill.style.width = pct + '%';
+      }, 200);
+    } else {
+      // MODE B: replay synced to real elapsed time, then show results
+      const TOTAL_MS = Math.max(realElapsedMs + 600, 3000); // at least 3s for UX
+      markStep(0, false);
 
-    setTimeout(() => {
-      clearInterval(tickInterval);
-      canvas.style.opacity = '0';
-      steps.forEach((_, i) => markStep(i, true));
-      progressFill.style.width = '100%';
-      subEl.textContent = 'Analysis complete ✓';
+      const tickInterval = setInterval(() => {
+        const elapsed = Date.now() - animStart;
+        const pct = Math.min(100, (elapsed / TOTAL_MS) * 100);
+        progressFill.style.width = pct + '%';
+        const secs = (realElapsedMs / 1000).toFixed(1);
+        timerEl.textContent = 'Analyzed in ' + secs + 's';
+        const newStep = Math.min(steps.length - 1, Math.floor(elapsed / (TOTAL_MS / steps.length)));
+        if (newStep > cur) { markStep(cur, true); cur = newStep; markStep(cur, false); }
+      }, 100);
+
+      // Particles 800ms before end
+      setTimeout(() => { canvas.style.opacity = '1'; spawnParticles(); animParticles(); }, Math.max(TOTAL_MS - 800, 500));
+
       setTimeout(() => {
-        analysisWrap.style.transition = 'opacity 0.6s ease';
-        analysisWrap.style.opacity = '0';
+        clearInterval(tickInterval);
+        canvas.style.opacity = '0';
+        steps.forEach((_, i) => markStep(i, true));
+        progressFill.style.width = '100%';
+        const secs = (realElapsedMs / 1000).toFixed(1);
+        subEl.textContent = 'Analysis complete ✓';
+        timerEl.textContent = 'Analyzed in ' + secs + 's';
         setTimeout(() => {
-          analysisWrap.style.display = 'none';
-          showResults();
-        }, 600);
-      }, 350);
-    }, TOTAL_MS);
+          analysisWrap.style.transition = 'opacity 0.6s ease';
+          analysisWrap.style.opacity = '0';
+          setTimeout(() => { analysisWrap.style.display = 'none'; showResults(); }, 600);
+        }, 400);
+      }, TOTAL_MS);
+    }
   }
 
   function showResults() {
