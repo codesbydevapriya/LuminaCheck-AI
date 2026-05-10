@@ -329,12 +329,25 @@ def confidence_label(score: float) -> str:
     else:              return "Low Confidence"
 
 # ─── STATE MACHINE LOGIC ───────────────────────────────────────────────────────
+
+# Handle reset triggered by "Scan another image" button via query param
+if st.query_params.get("reset") == "1":
+    st.session_state.ui_phase = "upload"
+    st.session_state.last_result = None
+    st.session_state.last_image = None
+    st.session_state.current_file_bytes = b""
+    st.session_state.current_filename = None
+    st.session_state.ready_to_analyze = False
+    st.query_params.clear()
+    st.rerun()
+
 uploaded_file = st.file_uploader(
     "upload", type=["jpg", "jpeg", "png", "webp"],
     label_visibility="collapsed", key="img_upload"
 )
 
-if uploaded_file is not None and st.session_state.ui_phase == "upload":
+# Accept new upload from EITHER "upload" or "results" phase
+if uploaded_file is not None and st.session_state.ui_phase in ("upload", "results"):
     st.session_state.current_filename = uploaded_file.name
     st.session_state.current_file_bytes = uploaded_file.read()
     st.session_state.ui_phase = "uploading"
@@ -1001,8 +1014,8 @@ ${data.generator && data.generator !== 'Unknown' && data.generator !== 'Real Pho
   };
 
   window.resetToUpload = function() {
-    const fu = window.parent.document.querySelector('[data-testid="stFileUploader"] input[type="file"]');
-    if (fu) fu.click();
+    // Set ?reset=1 so Streamlit picks it up on next rerun and clears state
+    window.parent.location.href = window.parent.location.pathname + '?reset=1';
   };
 })();
 </script>
