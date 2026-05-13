@@ -1,119 +1,84 @@
-#  LuminaCheck AI
+# LuminaCheck AI  
 ### Where Light Reveals Truth
 
 ![Python](https://img.shields.io/badge/Python-3.11-blue?style=for-the-badge&logo=python)
 ![Streamlit](https://img.shields.io/badge/Streamlit-Latest-red?style=for-the-badge&logo=streamlit)
-![Gemini AI](https://img.shields.io/badge/Google_Gemini-AI-green?style=for-the-badge&logo=google)
+![Google Gemini](https://img.shields.io/badge/Google_Gemini-2.5_Flash-green?style=for-the-badge&logo=google)
+![PyTorch](https://img.shields.io/badge/PyTorch-ResNet18-orange?style=for-the-badge&logo=pytorch)
 ![License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)
 
-> **LuminaCheck AI** is an advanced AI-powered web application that detects whether a digital image is **REAL**, **FAKE**, or **AI-GENERATED** using Google Gemini Vision AI.
+> LuminaCheck AI is a cinematic AI-powered forensic image analysis platform that detects whether an image is REAL, SUSPICIOUS, or AI-GENERATED using hybrid AI signals, metadata inspection, and pixel-level forensics.
 
 ---
 
-##  Live Demo
- **[https://luminacheck-ai.streamlit.app](https://luminacheck-ai.streamlit.app)**
+# Live Demo
+
+🌐 https://luminacheck-ai.streamlit.app
 
 ---
 
-##  Features
+# Features
 
 | Feature | Description |
-|---------|-------------|
-|  AI Detection | Detects REAL, FAKE, or AI-GENERATED images |
-|  Confidence Score | 0-100% confidence percentage |
-|  Detailed Reasoning | 2-3 specific visual clues |
-|  Detection History | Session-based history table |
-|  CSV Download | Download detection report |
-|  AI Chatbot | Sidebar AI assistant |
-|  Dark UI | Professional animated interface |
-|  Responsive | Works on mobile & desktop |
+|---|---|
+| AI Image Detection | Detects AI-generated, manipulated, or real images |
+| Gemini Vision Analysis | Uses Google Gemini 2.5 Flash for visual reasoning |
+| Pixel Forensics | Analyzes texture variance, edge energy, and RGB correlations |
+| EXIF Metadata Scan | Detects editing tools and AI generators |
+| Filename Intelligence | Flags suspicious AI-related filenames |
+| Hybrid Signal Fusion | Combines multiple forensic signals into one score |
+| Confidence Meter | High, Medium, or Low confidence verdict |
+| Animated UI | Cinematic dark-mode interface with smooth transitions |
+| Detection History | Stores recent scan history during session |
+| CSV Export | Download scan reports instantly |
+| Mobile Responsive | Works on desktop and mobile browsers |
 
 ---
 
-##  Tech Stack
+# Detection Pipeline
 
-- **Python** — Core programming language
-- **Streamlit** — Web application framework  
-- **Google Gemini AI** — Image analysis engine (gemini-2.5-flash)
-- **Pillow** — Image processing
-- **Pandas** — Data management
-- **Streamlit Cloud** — Deployment & hosting
+LuminaCheck AI uses a multi-layer forensic system:
+
+1. Upload image
+2. Gemini Vision analyzes visual inconsistencies
+3. EXIF metadata gets scanned
+4. Pixel-level forensic checks run
+5. Filename patterns are analyzed
+6. Hybrid scoring engine calculates final verdict
 
 ---
 
-##  Run Locally
+# Tech Stack
+
+- Python 3.11
+- Streamlit
+- Google Gemini 2.5 Flash
+- PyTorch
+- ResNet18
+- Pillow (PIL)
+- NumPy
+- Pandas
+- HTML/CSS/JavaScript
+- Streamlit Cloud
+
+---
+
+# AI Detection Signals
+
+| Signal | Purpose |
+|---|---|
+| Gemini Vision | Visual reasoning and AI artifact detection |
+| Metadata Analysis | Detects editing tools and AI generators |
+| Pixel Forensics | Texture, edge, and color pattern analysis |
+| Filename Analysis | Detects suspicious naming conventions |
+| Signal Fusion Engine | Weighted scoring and confidence estimation |
+
+---
+
+# Installation
+
+## Clone Repository
+
 ```bash
-# Clone the repository
 git clone https://github.com/codesbydevapriya/LuminaCheck-AI.git
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Set your API key
-export GEMINI_API_KEY="your_api_key_here"
-
-# Run the app
-streamlit run app.py
-```
-
----
-
-##  Project Structure
-```
-LuminaCheck-AI/
-├── app.py              # Main application
-├── requirements.txt    # Dependencies
-└── README.md          # Project documentation
-```
-
----
-
-##  Environment Variables
-
-| Variable | Description |
-|----------|-------------|
-| `GEMINI_API_KEY` | Google Gemini API Key |
-
-Get your free API key at [aistudio.google.com](https://aistudio.google.com)
-
----
-
-##  How It Works
-
-1. **Upload** any JPG/JPEG/PNG image
-2. **Click** "Analyze Image Now"
-3. **AI scans** for forensic clues
-4. **Get verdict** — REAL  or FAKE 
-
----
-
-##  Limitations
-
-- Ultra-realistic AI images may occasionally be misclassified
-- Free tier API has rate limits
-- Detection accuracy depends on Gemini AI model
-
----
-
-##  Future Scope
-
-- Custom CNN model for higher accuracy
-- Video deepfake detection
-- Batch image processing
-- Mobile application
-
----
-
-##  Developer
-
-**Devapriya** — BCA Final Year Student | March 2026
-
----
-
-##  License
-
-This project is licensed under the MIT License.
-
----
-
-<p align="center">Made by Devapriya | Powered by Google Gemini AI</p>
+cd LuminaCheck-AI
