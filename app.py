@@ -123,81 +123,68 @@ def resize_for_gemini(image: Image.Image, max_px: int = 768) -> Image.Image:
     ratio = max_px / max(w, h)
     return image.resize((int(w * ratio), int(h * ratio)), Image.LANCZOS)
 
-def detect_with_gemini(image: Image.Image) -> tuple:
-    MODEL_NAMES = [
-        "gemini-2.5-flash-preview-05-20",
-        "gemini-2.0-flash",
-        "gemini-1.5-flash",
-    ]
-    prompt = """You are a forensic AI image analyst.
-Analyze this image for signs of AI generation vs real photography.
-Check:
-- Skin/texture smoothness (AI is unnaturally smooth)
-- Lighting physics (AI often has inconsistent light sources)
-- Background coherence and detail degradation
-- Hair/finger/edge sharpness (AI frequently fails here)
-- Noise grain (real cameras have natural grain; AI images lack it)
-- Facial symmetry (AI tends toward uncanny perfection)
-Respond in this EXACT format (no extra text):
-SCORE: [0-100]
-REASON: [2-3 sentence explanation]
-Where 0 = definitely real photo, 100 = definitely AI generated."""
-
+def get_openrouter_summary(score: float, meta_note: str, forensic_note: str, fname_note: str) -> str:
+    """Generate a human-readable summary using OpenRouter (text only, no image needed)."""
     try:
-        genai.configure(api_key=GEMINI_API_KEY)
-        small_img = resize_for_gemini(image, max_px=768)
+        import urllib.request
+        OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
+        if not OPENROUTER_API_KEY:
+            return "OpenRouter API key not set."
 
-        last_error = ""
-        for model_name in MODEL_NAMES:
-            try:
-                model = genai.GenerativeModel(model_name)
-                for attempt in range(3):
-                    try:
-                        response = model.generate_content(
-                            [prompt, small_img],
-                            generation_config=genai.GenerationConfig(
-                                max_output_tokens=200,
-                                temperature=0.05,
-                            )
-                        )
-                        text = response.text.strip()
-                        score_match = re.search(r"SCORE:\s*(\d+)", text)
-                        reason_match = re.search(r"REASON:\s*(.+)", text, re.DOTALL)
-                        if score_match:
-                            score = float(score_match.group(1)) / 100
-                            score = max(0.0, min(1.0, score))
-                            reason = reason_match.group(1).strip() if reason_match else "Analysis complete."
-                            return score, reason
-                    except Exception as e:
-                        last_error = str(e)
-                        if "429" in last_error:
-                            time.sleep(4 * (attempt + 1))
-                        else:
-                            break
-            except Exception as e:
-                last_error = str(e)
-                continue
+        label = "AI Generated" if score >= 0.48 else "Likely Real"
+        pct = round(score * 100)
 
-        return 0.5, f"Gemini unavailable: {last_error[:120]}"
+        prompt = f"""You are a forensic image analysis assistant.
+Based on these signal scores, write a 2-3 sentence summary explaining why this image was classified as '{label}' with {pct}% AI probability.
+
+Signals detected:
+- EXIF metadata: {meta_note}
+- Pixel forensics: {forensic_note}
+- Filename pattern: {fname_note}
+
+Write only the summary. No preamble, no bullet points."""
+
+        payload = json.dumps({
+            "model": "meta-llama/llama-3.1-8b-instruct:free",
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 150,
+            "temperature": 0.3,
+        }).encode("utf-8")
+
+        req = urllib.request.Request(
+            "https://openrouter.ai/api/v1/chat/completions",
+            data=payload,
+            headers={
+                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://luminacheck-ai.streamlit.app",
+            },
+            method="POST"
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode())
+            return data["choices"][0]["message"]["content"].strip()
     except Exception as e:
-        return 0.5, f"Gemini error: {str(e)[:120]}"
+        return f"Summary unavailable: {str(e)[:80]}"
+
+
+def detect_with_gemini(image: Image.Image) -> tuple:
+    """Returns (score, reason). Score is always from local signals; reason from OpenRouter."""
+    return 0.5, "__use_openrouter__"
 
 def detect(image: Image.Image, filename: str) -> dict:
     try:
-        gemini_score, gemini_reason = detect_with_gemini(image)
         meta_score, meta_note = analyze_metadata(image)
         forensic_score, forensic_note = analyze_forensics(image)
         fname_score, fname_note = analyze_filename(filename)
 
-        g = max(0.05, min(0.95, gemini_score))
-
-        # Gemini is primary signal — 65% weight
+        # Score purely from local signals (no Gemini)
         base_score = (
-            0.65 * g +
-            0.15 * meta_score +
-            0.15 * forensic_score +
-            0.05 * fname_score
+            0.50 * forensic_score +
+            0.30 * meta_score +
+            0.20 * fname_score
         )
+        g = base_score  # used in tiebreaker logic below
 
         # Strong metadata override: if EXIF confirms camera, pull score down
         if meta_score <= 0.12:
@@ -217,13 +204,16 @@ def detect(image: Image.Image, filename: str) -> dict:
 
         final = round(max(0.0, min(1.0, base_score)), 3)
 
+        # OpenRouter summary (text only)
+        summary = get_openrouter_summary(final, meta_note, forensic_note, fname_note)
+
         return {
             "score": final,
-            "gemini_score": g,
+            "gemini_score": forensic_score,
             "meta_score": meta_score,
             "forensic_score": forensic_score,
             "fname_score": fname_score,
-            "reason": gemini_reason,
+            "reason": summary,
             "meta_note": meta_note,
             "forensic_note": forensic_note,
             "fname_note": fname_note,
@@ -543,7 +533,7 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
       </div>
       <div class="signals" id="signalsGrid"></div>
       <div class="reason-box" id="reasonBox">
-        <div class="reason-title">Gemini analysis</div>
+        <div class="reason-title">AI Analysis</div>
         <div class="reason-text" id="reasonText">—</div>
       </div>
       <button class="tech-toggle" onclick="toggleTech()">show technical details</button>
