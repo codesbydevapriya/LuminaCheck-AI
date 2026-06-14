@@ -130,23 +130,37 @@ def detect_with_gemini(image: Image.Image) -> tuple:
         genai.configure(api_key=GEMINI_API_KEY)
         model = genai.GenerativeModel("gemini-2.5-flash")
         small_img = resize_for_gemini(image, max_px=768)
-        prompt = """You are a forensic AI image analyst.
+        prompt = """You are an expert forensic AI image detector with 95%+ accuracy.
 
-Analyze this image for signs of AI generation vs real photography.
+Analyze this image VERY carefully for AI generation artifacts:
 
-Check:
-- Skin/texture smoothness (AI is unnaturally smooth)
-- Lighting physics (AI often has inconsistent light sources)
-- Background coherence and detail degradation
-- Hair/finger/edge sharpness (AI frequently fails here)
-- Noise grain (real cameras have natural grain; AI images lack it)
-- Facial symmetry (AI tends toward uncanny perfection)
+REAL PHOTO indicators:
+- Natural sensor noise/grain visible
+- Slight chromatic aberration at edges
+- Authentic motion blur or depth of field
+- Realistic skin pores, hair strands, fabric texture
+- Consistent lighting with real-world physics
+- EXIF data from camera hardware
 
-Respond in this EXACT format (no extra text):
+AI GENERATED indicators:
+- Unnaturally smooth skin/surfaces
+- Perfect but slightly wrong fingers/hands/teeth
+- Background elements that dissolve or repeat
+- Lighting that defies physics
+- Overly symmetric faces
+- Missing natural noise/grain
+- Blurry or incoherent text in scene
+- Watercolor-like blending in fine details
+
+Be STRICT. Score 0-100 where:
+0-30 = definitely real photo
+31-50 = likely real with minor doubts
+51-70 = likely AI generated
+71-100 = definitely AI generated
+
+Respond EXACTLY:
 SCORE: [0-100]
-REASON: [2-3 sentence explanation]
-
-Where 0 = definitely real photo, 100 = definitely AI generated."""
+REASON: [2-3 sentences citing specific artifacts you observed]"""
 
         for attempt in range(3):
             try:
@@ -182,13 +196,12 @@ def detect(image: Image.Image, filename: str) -> dict:
 
         g = max(0.08, min(0.92, gemini_score))
 
-        base_score = (
-            0.50 * g +
-            0.18 * meta_score +
-            0.18 * forensic_score +
-            0.08 * fname_score
-        )
-
+       base_score = (
+    0.65 * g +
+    0.15 * meta_score +
+    0.15 * forensic_score +
+    0.05 * fname_score
+)
         # Override weak Gemini
         suspicion = 0
 
@@ -203,9 +216,6 @@ def detect(image: Image.Image, filename: str) -> dict:
 
         if g < 0.25 and suspicion >= 2:
             base_score = max(base_score, 0.45)
-
-        if 0.3 < g < 0.6:
-            base_score += 0.12
 
         final = round(max(0.0, min(1.0, base_score)), 3)
 
@@ -236,9 +246,8 @@ def detect(image: Image.Image, filename: str) -> dict:
             "spread": 0
         }
 def classify(score: float) -> str:
-    if score >= 0.65:   return "AI Generated"
-    elif score <= 0.45: return "Likely Real"
-    else:               return "Suspicious"
+    if score >= 0.52:   return "AI Generated"
+    else:               return "Likely Real"
 
 def confidence_label(score: float) -> str:
     dist = abs(score - 0.5)
@@ -737,7 +746,7 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
     const badge = document.getElementById('verdictBadge');
     badge.textContent = label;
     badge.className = 'verdict-badge ' +
-      (label === 'AI Generated' ? 'badge-ai' : label === 'Likely Real' ? 'badge-real' : 'badge-sus');
+  (label === 'AI Generated' ? 'badge-ai' : 'badge-real');
 
     document.getElementById('confTag').textContent = data.conf;
     document.getElementById('probNum').textContent = '—%';
