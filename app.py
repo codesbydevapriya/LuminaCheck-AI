@@ -145,7 +145,7 @@ Signals detected:
 Write only the summary. No preamble, no bullet points."""
 
         payload = json.dumps({
-            "model": "google/gemma-3-1b-it:fre",
+            "model": "google/gemma-4-31b-it:free",
             "messages": [{"role": "user", "content": prompt}],
             "max_tokens": 150,
             "temperature": 0.3,
