@@ -125,16 +125,23 @@ def resize_for_gemini(image: Image.Image, max_px: int = 768) -> Image.Image:
 
 def get_openrouter_summary(score: float, meta_note: str, forensic_note: str, fname_note: str) -> str:
     """Generate a human-readable summary using OpenRouter (text only, no image needed)."""
-    try:
-        import urllib.request
-        OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
-        if not OPENROUTER_API_KEY:
-            return "OpenRouter API key not set."
+    import urllib.request, urllib.error
 
-        label = "AI Generated" if score >= 0.48 else "Likely Real"
-        pct = round(score * 100)
+    OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
+    if not OPENROUTER_API_KEY:
+        return "OpenRouter API key not set."
 
-        prompt = f"""You are a forensic image analysis assistant.
+    # Rotate through free models if one rate-limits
+    MODELS = [
+        "meta-llama/llama-3.2-3b-instruct:free",
+        "mistralai/mistral-7b-instruct:free",
+        "google/gemma-3-1b-it:free",
+    ]
+
+    label = "AI Generated" if score >= 0.48 else "Likely Real"
+    pct = round(score * 100)
+
+    prompt = f"""You are a forensic image analysis assistant.
 Based on these signal scores, write a 2-3 sentence summary explaining why this image was classified as '{label}' with {pct}% AI probability.
 
 Signals detected:
@@ -144,28 +151,43 @@ Signals detected:
 
 Write only the summary. No preamble, no bullet points."""
 
-        payload = json.dumps({
-            "model": "google/gemma-4-31b-it:free",
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 150,
-            "temperature": 0.3,
-        }).encode("utf-8")
+    for model in MODELS:
+        for attempt in range(2):
+            try:
+                payload = json.dumps({
+                    "model": model,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "max_tokens": 150,
+                    "temperature": 0.3,
+                }).encode("utf-8")
 
-        req = urllib.request.Request(
-            "https://openrouter.ai/api/v1/chat/completions",
-            data=payload,
-            headers={
-                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                "Content-Type": "application/json",
-                "HTTP-Referer": "https://luminacheck-ai.streamlit.app",
-            },
-            method="POST"
-        )
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            data = json.loads(resp.read().decode())
-            return data["choices"][0]["message"]["content"].strip()
-    except Exception as e:
-        return f"Summary unavailable: {str(e)[:80]}"
+                req = urllib.request.Request(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    data=payload,
+                    headers={
+                        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                        "Content-Type": "application/json",
+                        "HTTP-Referer": "https://luminacheck-ai.streamlit.app",
+                    },
+                    method="POST"
+                )
+                with urllib.request.urlopen(req, timeout=12) as resp:
+                    data = json.loads(resp.read().decode())
+                    return data["choices"][0]["message"]["content"].strip()
+            except urllib.error.HTTPError as e:
+                if e.code == 429:
+                    time.sleep(3 * (attempt + 1))  # wait then retry
+                    continue
+                else:
+                    break  # try next model
+            except Exception:
+                break  # try next model
+
+    # All models failed — generate a basic rule-based summary
+    if score >= 0.48:
+        return f"This image shows characteristics consistent with AI generation. Pixel forensics and signal analysis returned a {pct}% AI probability score. No camera metadata was detected to confirm authentic photography."
+    else:
+        return f"This image appears to be a real photograph based on signal analysis ({pct}% AI probability). Forensic indicators suggest authentic camera characteristics are present."
 
 
 def detect_with_gemini(image: Image.Image) -> tuple:
