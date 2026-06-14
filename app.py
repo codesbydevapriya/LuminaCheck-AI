@@ -145,7 +145,7 @@ Signals detected:
 Write only the summary. No preamble, no bullet points."""
 
         payload = json.dumps({
-            "model": "meta-llama/llama-3.1-8b-instruct:free",
+            "model": "mistralai/mistral-7b-instruct:free",
             "messages": [{"role": "user", "content": prompt}],
             "max_tokens": 150,
             "temperature": 0.3,
