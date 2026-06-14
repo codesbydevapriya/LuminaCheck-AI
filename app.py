@@ -128,40 +128,19 @@ def detect_with_gemini(image: Image.Image) -> tuple:
         genai.configure(api_key=GEMINI_API_KEY)
         model = genai.GenerativeModel("gemini-2.5-flash")
         small_img = resize_for_gemini(image, max_px=768)
-        prompt = """You are an expert forensic AI image detector with 95%+ accuracy.
-
-Analyze this image VERY carefully for AI generation artifacts.
-
-REAL PHOTO indicators:
-- Natural sensor noise/grain visible throughout
-- Slight chromatic aberration at high-contrast edges
-- Authentic motion blur or depth of field falloff
-- Realistic skin pores, individual hair strands, fabric texture
-- Consistent lighting obeying real-world physics (shadows match light source)
-- Natural imperfections: asymmetry, blemishes, wear marks
-
-AI GENERATED indicators:
-- Unnaturally smooth skin or surfaces lacking micro-texture
-- Perfect but subtly wrong anatomy: fingers, hands, teeth, ears
-- Background elements that dissolve, repeat, or lack coherence
-- Lighting that defies physics or has no clear source
-- Overly symmetric faces with uncanny perfection
-- Missing natural noise — images look "painted" or too clean
-- Blurry, garbled, or nonsensical text within the scene
-- Watercolor-like blending in fine detail areas (hair edges, lashes)
-- Fabric folds or wrinkles that look sculpted rather than natural
-
-Be STRICT and decisive. Do NOT default to the middle range.
-
-Score 0-100 where:
-0-25  = definitely real photo, clear camera characteristics
-26-49 = likely real, minor ambiguities only
-50-74 = likely AI generated, notable artifacts present
-75-100 = definitely AI generated, strong artifacts confirmed
-
-Respond EXACTLY in this format with no extra text:
+        prompt = """You are a forensic AI image analyst.
+Analyze this image for signs of AI generation vs real photography.
+Check:
+- Skin/texture smoothness (AI is unnaturally smooth)
+- Lighting physics (AI often has inconsistent light sources)
+- Background coherence and detail degradation
+- Hair/finger/edge sharpness (AI frequently fails here)
+- Noise grain (real cameras have natural grain; AI images lack it)
+- Facial symmetry (AI tends toward uncanny perfection)
+Respond in this EXACT format (no extra text):
 SCORE: [0-100]
-REASON: [2-3 sentences citing specific artifacts or real-photo evidence you observed]"""
+REASON: [2-3 sentence explanation]
+Where 0 = definitely real photo, 100 = definitely AI generated."""
 
         for attempt in range(3):
             try:
