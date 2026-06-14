@@ -124,11 +124,12 @@ def resize_for_gemini(image: Image.Image, max_px: int = 768) -> Image.Image:
     return image.resize((int(w * ratio), int(h * ratio)), Image.LANCZOS)
 
 def detect_with_gemini(image: Image.Image) -> tuple:
-    try:
-        genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel("gemini-2.5-flash")
-        small_img = resize_for_gemini(image, max_px=768)
-        prompt = """You are a forensic AI image analyst.
+    MODEL_NAMES = [
+        "gemini-2.5-flash-preview-05-20",
+        "gemini-2.0-flash",
+        "gemini-1.5-flash",
+    ]
+    prompt = """You are a forensic AI image analyst.
 Analyze this image for signs of AI generation vs real photography.
 Check:
 - Skin/texture smoothness (AI is unnaturally smooth)
@@ -142,31 +143,44 @@ SCORE: [0-100]
 REASON: [2-3 sentence explanation]
 Where 0 = definitely real photo, 100 = definitely AI generated."""
 
-        for attempt in range(3):
+    try:
+        genai.configure(api_key=GEMINI_API_KEY)
+        small_img = resize_for_gemini(image, max_px=768)
+
+        last_error = ""
+        for model_name in MODEL_NAMES:
             try:
-                response = model.generate_content(
-                    [prompt, small_img],
-                    generation_config=genai.GenerationConfig(
-                        max_output_tokens=200,
-                        temperature=0.05,
-                    )
-                )
-                text = response.text.strip()
-                score_match = re.search(r"SCORE:\s*(\d+)", text)
-                reason_match = re.search(r"REASON:\s*(.+)", text, re.DOTALL)
-                if score_match:
-                    score = float(score_match.group(1)) / 100
-                    score = max(0.0, min(1.0, score))
-                    reason = reason_match.group(1).strip() if reason_match else "Analysis complete."
-                    return score, reason
+                model = genai.GenerativeModel(model_name)
+                for attempt in range(3):
+                    try:
+                        response = model.generate_content(
+                            [prompt, small_img],
+                            generation_config=genai.GenerationConfig(
+                                max_output_tokens=200,
+                                temperature=0.05,
+                            )
+                        )
+                        text = response.text.strip()
+                        score_match = re.search(r"SCORE:\s*(\d+)", text)
+                        reason_match = re.search(r"REASON:\s*(.+)", text, re.DOTALL)
+                        if score_match:
+                            score = float(score_match.group(1)) / 100
+                            score = max(0.0, min(1.0, score))
+                            reason = reason_match.group(1).strip() if reason_match else "Analysis complete."
+                            return score, reason
+                    except Exception as e:
+                        last_error = str(e)
+                        if "429" in last_error:
+                            time.sleep(4 * (attempt + 1))
+                        else:
+                            break
             except Exception as e:
-                if "429" in str(e):
-                    time.sleep(4 * (attempt + 1))
-                else:
-                    break
-        return 0.5, "Gemini analysis unavailable."
-    except Exception:
-        return 0.5, "Gemini error."
+                last_error = str(e)
+                continue
+
+        return 0.5, f"Gemini unavailable: {last_error[:120]}"
+    except Exception as e:
+        return 0.5, f"Gemini error: {str(e)[:120]}"
 
 def detect(image: Image.Image, filename: str) -> dict:
     try:
