@@ -193,6 +193,14 @@ def detect(image: Image.Image, filename: str) -> dict:
         if meta_score >= 0.90:
             base_score = max(base_score, 0.75)
 
+        # Tiebreaker: Gemini on the fence (0.42–0.58) + filename signals AI → nudge up
+        if 0.42 <= g <= 0.58 and fname_score >= 0.70:
+            base_score += 0.08
+
+        # Tiebreaker: Gemini on the fence + no EXIF camera data → nudge up (likely AI)
+        if 0.42 <= g <= 0.58 and meta_score >= 0.38:
+            base_score += 0.06
+
         final = round(max(0.0, min(1.0, base_score)), 3)
 
         return {
@@ -223,7 +231,7 @@ def detect(image: Image.Image, filename: str) -> dict:
         }
 
 def classify(score: float) -> str:
-    if score >= 0.52:
+    if score >= 0.48:
         return "AI Generated"
     else:
         return "Likely Real"
