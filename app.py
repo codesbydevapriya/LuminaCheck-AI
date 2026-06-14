@@ -11,20 +11,18 @@ import re
 import time
 import numpy as np
 import io
-import streamlit as st
 import torch
 import torchvision.transforms as transforms
+
 @st.cache_resource
 def load_detector():
     device = "cuda" if torch.cuda.is_available() else "cpu"
-
     model = torch.hub.load("pytorch/vision", "resnet18", pretrained=True)
     model.fc = torch.nn.Linear(model.fc.in_features, 2)
-
     model.eval()
     model.to(device)
-
     return model, device
+
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
@@ -132,43 +130,46 @@ def detect_with_gemini(image: Image.Image) -> tuple:
         small_img = resize_for_gemini(image, max_px=768)
         prompt = """You are an expert forensic AI image detector with 95%+ accuracy.
 
-Analyze this image VERY carefully for AI generation artifacts:
+Analyze this image VERY carefully for AI generation artifacts.
 
 REAL PHOTO indicators:
-- Natural sensor noise/grain visible
-- Slight chromatic aberration at edges
-- Authentic motion blur or depth of field
-- Realistic skin pores, hair strands, fabric texture
-- Consistent lighting with real-world physics
-- EXIF data from camera hardware
+- Natural sensor noise/grain visible throughout
+- Slight chromatic aberration at high-contrast edges
+- Authentic motion blur or depth of field falloff
+- Realistic skin pores, individual hair strands, fabric texture
+- Consistent lighting obeying real-world physics (shadows match light source)
+- Natural imperfections: asymmetry, blemishes, wear marks
 
 AI GENERATED indicators:
-- Unnaturally smooth skin/surfaces
-- Perfect but slightly wrong fingers/hands/teeth
-- Background elements that dissolve or repeat
-- Lighting that defies physics
-- Overly symmetric faces
-- Missing natural noise/grain
-- Blurry or incoherent text in scene
-- Watercolor-like blending in fine details
+- Unnaturally smooth skin or surfaces lacking micro-texture
+- Perfect but subtly wrong anatomy: fingers, hands, teeth, ears
+- Background elements that dissolve, repeat, or lack coherence
+- Lighting that defies physics or has no clear source
+- Overly symmetric faces with uncanny perfection
+- Missing natural noise — images look "painted" or too clean
+- Blurry, garbled, or nonsensical text within the scene
+- Watercolor-like blending in fine detail areas (hair edges, lashes)
+- Fabric folds or wrinkles that look sculpted rather than natural
 
-Be STRICT. Score 0-100 where:
-0-30 = definitely real photo
-31-50 = likely real with minor doubts
-51-70 = likely AI generated
-71-100 = definitely AI generated
+Be STRICT and decisive. Do NOT default to the middle range.
 
-Respond EXACTLY:
+Score 0-100 where:
+0-25  = definitely real photo, clear camera characteristics
+26-49 = likely real, minor ambiguities only
+50-74 = likely AI generated, notable artifacts present
+75-100 = definitely AI generated, strong artifacts confirmed
+
+Respond EXACTLY in this format with no extra text:
 SCORE: [0-100]
-REASON: [2-3 sentences citing specific artifacts you observed]"""
+REASON: [2-3 sentences citing specific artifacts or real-photo evidence you observed]"""
 
         for attempt in range(3):
             try:
                 response = model.generate_content(
                     [prompt, small_img],
                     generation_config=genai.GenerationConfig(
-                        max_output_tokens=180,
-                        temperature=0.1,
+                        max_output_tokens=200,
+                        temperature=0.05,
                     )
                 )
                 text = response.text.strip()
@@ -187,6 +188,7 @@ REASON: [2-3 sentences citing specific artifacts you observed]"""
         return 0.5, "Gemini analysis unavailable."
     except Exception:
         return 0.5, "Gemini error."
+
 def detect(image: Image.Image, filename: str) -> dict:
     try:
         gemini_score, gemini_reason = detect_with_gemini(image)
@@ -194,28 +196,23 @@ def detect(image: Image.Image, filename: str) -> dict:
         forensic_score, forensic_note = analyze_forensics(image)
         fname_score, fname_note = analyze_filename(filename)
 
-        g = max(0.08, min(0.92, gemini_score))
+        g = max(0.05, min(0.95, gemini_score))
 
-       base_score = (
-    0.65 * g +
-    0.15 * meta_score +
-    0.15 * forensic_score +
-    0.05 * fname_score
-)
-        # Override weak Gemini
-        suspicion = 0
+        # Gemini is primary signal — 65% weight
+        base_score = (
+            0.65 * g +
+            0.15 * meta_score +
+            0.15 * forensic_score +
+            0.05 * fname_score
+        )
 
-        if meta_score > 0.45:
-            suspicion += 1
+        # Strong metadata override: if EXIF confirms camera, pull score down
+        if meta_score <= 0.12:
+            base_score = min(base_score, 0.45)
 
-        if forensic_score > 0.40:
-            suspicion += 1
-
-        if fname_score > 0.6:
-            suspicion += 1
-
-        if g < 0.25 and suspicion >= 2:
-            base_score = max(base_score, 0.45)
+        # Strong metadata override: if AI tool found in EXIF, push score up
+        if meta_score >= 0.90:
+            base_score = max(base_score, 0.75)
 
         final = round(max(0.0, min(1.0, base_score)), 3)
 
@@ -245,9 +242,12 @@ def detect(image: Image.Image, filename: str) -> dict:
             "fname_note": "",
             "spread": 0
         }
+
 def classify(score: float) -> str:
-    if score >= 0.52:   return "AI Generated"
-    else:               return "Likely Real"
+    if score >= 0.52:
+        return "AI Generated"
+    else:
+        return "Likely Real"
 
 def confidence_label(score: float) -> str:
     dist = abs(score - 0.5)
@@ -261,27 +261,22 @@ uploaded_file = st.file_uploader(
     label_visibility="collapsed", key="img_upload"
 )
 
-# Step 1: file just picked → switch to "uploading" to show upload animation, store file bytes immediately
 if uploaded_file is not None and st.session_state.ui_phase == "upload":
     st.session_state.current_filename = uploaded_file.name
-    st.session_state.current_file_bytes = uploaded_file.read()  # read now before rerun clears it
+    st.session_state.current_file_bytes = uploaded_file.read()
     st.session_state.ui_phase = "uploading"
     st.session_state.ready_to_analyze = False
     st.rerun()
 
-# Step 2: show uploading animation for one render, then flip to analyzing
 if st.session_state.ui_phase == "uploading":
     st.session_state.ui_phase = "analyzing"
     st.rerun()
 
-# Step 3: show analyzing animation for one render (ready_to_analyze=False), then do work
 if st.session_state.ui_phase == "analyzing":
     if not st.session_state.ready_to_analyze:
-        # First pass: just render the animation, schedule work for next rerun
         st.session_state.ready_to_analyze = True
         st.rerun()
     else:
-        # Second pass: do the actual analysis
         image = Image.open(io.BytesIO(st.session_state.current_file_bytes)).convert("RGB")
         result = detect(image, st.session_state.current_filename)
 
@@ -311,6 +306,7 @@ if st.session_state.ui_phase == "uploading":
     })
 elif st.session_state.ui_phase == "analyzing":
     phase_data["progress"] = 0
+
 if st.session_state.ui_phase == "results":
     result = st.session_state.last_result
     image = st.session_state.get("last_image")
@@ -429,7 +425,6 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
 .verdict-badge{font-family:'DM Mono',monospace;font-size:0.68rem;letter-spacing:0.13em;text-transform:uppercase;padding:0.3rem 0.9rem;border-radius:20px;font-weight:500}
 .badge-ai{background:rgba(224,92,92,0.15);color:var(--ai);border:1px solid rgba(224,92,92,0.35)}
 .badge-real{background:rgba(78,203,141,0.15);color:var(--real);border:1px solid rgba(78,203,141,0.35)}
-.badge-sus{background:rgba(212,168,75,0.15);color:var(--sus);border:1px solid rgba(212,168,75,0.35)}
 .conf-tag{font-size:0.7rem;color:var(--muted);font-family:'DM Mono',monospace}
 .prob-num{font-family:'DM Serif Display',serif;font-size:3.4rem;line-height:1;color:var(--text);margin-bottom:0.2rem}
 .prob-label{font-size:0.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.14em;font-family:'DM Mono',monospace}
@@ -604,7 +599,6 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
     dropZone.style.display = 'block';
   }
 
-  // FIX: "uploading" phase removed; this block kept for safety but will never trigger
   else if (phase === 'uploading') {
     dropZone.style.display = 'none';
     uploadWrap.classList.add('active');
@@ -620,13 +614,11 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
     dropZone.style.display = 'none';
     analysisWrap.classList.add('active');
 
-    // ── Cinematic 5-step animation (always plays, regardless of phase) ──
     const TOTAL_MS = 5000;
     const steps    = ['step0','step1','step2','step3'];
     const subs     = ['Running Gemini vision model…','Scanning EXIF metadata…','Running pixel forensics…','Fusing all signals…'];
     const subEl    = document.getElementById('analysisSub');
 
-    // Animated progress bar across full 5 s
     const progressBar = document.createElement('div');
     progressBar.style.cssText = 'height:3px;border-radius:2px;background:var(--surface2);overflow:hidden;position:relative;max-width:380px;margin:1.2rem auto 0';
     const progressFill = document.createElement('div');
@@ -634,7 +626,6 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
     progressBar.appendChild(progressFill);
     analysisWrap.appendChild(progressBar);
 
-    // Particle burst overlay
     const canvas = document.createElement('canvas');
     canvas.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:10;opacity:0;transition:opacity 0.5s';
     canvas.width = window.innerWidth; canvas.height = window.innerHeight;
@@ -665,9 +656,8 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
       else ctx.clearRect(0,0,canvas.width,canvas.height);
     }
 
-    // Countdown ticker shown in sub text
     let cur = 0;
-    const stepInterval = TOTAL_MS / steps.length; // 1250ms each
+    const stepInterval = TOTAL_MS / steps.length;
 
     function markStep(i, done) {
       const el = document.getElementById(steps[i]);
@@ -680,14 +670,12 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
       }
     }
 
-    // Tick progress bar every 100ms
     const startTime = Date.now();
     const tickInterval = setInterval(() => {
       const elapsed = Date.now() - startTime;
       const pct = Math.min(100, (elapsed / TOTAL_MS) * 100);
       progressFill.style.width = pct + '%';
 
-      // Advance steps at even intervals
       const newStep = Math.min(steps.length - 1, Math.floor(elapsed / stepInterval));
       if (newStep > cur) {
         markStep(cur, true);
@@ -698,22 +686,18 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
 
     markStep(0, false);
 
-    // At 4.2 s — flash particles so they finish by 5 s
     setTimeout(() => {
       canvas.style.opacity = '1';
       spawnParticles(); animParticles();
     }, 4200);
 
-    // At 5 s — reveal results
     setTimeout(() => {
       clearInterval(tickInterval);
       canvas.style.opacity = '0';
-      // Mark all steps done
       steps.forEach((_, i) => markStep(i, true));
       progressFill.style.width = '100%';
       subEl.textContent = 'Analysis complete ✓';
 
-      // Brief flash then crossfade to results
       setTimeout(() => {
         analysisWrap.style.transition = 'opacity 0.6s ease';
         analysisWrap.style.opacity = '0';
@@ -726,7 +710,7 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
   }
 
   function showResults() {
-    if (!data.score && data.score !== 0) return; // no result data yet (pure analyzing phase)
+    if (!data.score && data.score !== 0) return;
 
     mainGrid.style.display = 'grid';
     mainGrid.style.opacity = '0';
@@ -746,15 +730,13 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
     const badge = document.getElementById('verdictBadge');
     badge.textContent = label;
     badge.className = 'verdict-badge ' +
-  (label === 'AI Generated' ? 'badge-ai' : 'badge-real');
+      (label === 'AI Generated' ? 'badge-ai' : 'badge-real');
 
     document.getElementById('confTag').textContent = data.conf;
     document.getElementById('probNum').textContent = '—%';
 
-    // Fade grid in
     requestAnimationFrame(() => { mainGrid.style.opacity = '1'; });
 
-    // Animate score counter after fade
     setTimeout(() => {
       let n = 0;
       const target = pct;
@@ -779,14 +761,14 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
     const grid = document.getElementById('signalsGrid');
     grid.innerHTML = signals.map(s => {
       const sp  = Math.round(s.score * 100);
-      const col = s.score >= 0.65 ? 'var(--ai)' : s.score <= 0.40 ? 'var(--real)' : 'var(--sus)';
+      const col = s.score >= 0.52 ? 'var(--ai)' : 'var(--real)';
       return `<div class="sig-card">
         <div class="sig-name">${s.name}</div>
         <div class="sig-bar-wrap"><div class="sig-bar-fill" id="sb_${s.name.replace(/ /g,'')}" style="width:0%;background:${col}"></div></div>
         <div class="sig-score" style="color:${col}">${sp}%</div>
       </div>`;
     }).join('');
-    // Animate signal bars staggered
+
     signals.forEach((s, i) => {
       setTimeout(() => {
         const el = document.getElementById('sb_' + s.name.replace(/ /g,''));
@@ -804,7 +786,7 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
       historyWrap.style.display = 'block';
       const list = document.getElementById('historyList');
       list.innerHTML = data.history.slice().reverse().map(h => {
-        const dotCls = h.Result === 'AI Generated' ? 'dot-ai' : h.Result === 'Likely Real' ? 'dot-real' : 'dot-sus';
+        const dotCls = h.Result === 'AI Generated' ? 'dot-ai' : 'dot-real';
         return `<div class="history-row">
           <span class="dot ${dotCls}"></span>
           <span class="history-file">${h.File}</span>
