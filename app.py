@@ -236,8 +236,9 @@ def detect(image: Image.Image, filename: str) -> dict:
             "spread": 0
         }
 def classify(score: float) -> str:
-    if score >= 0.55:   return "AI Generated"
-    else:               return "Likely Real"
+    if score >= 0.65:   return "AI Generated"
+    elif score <= 0.45: return "Likely Real"
+    else:               return "Suspicious"
 
 def confidence_label(score: float) -> str:
     dist = abs(score - 0.5)
