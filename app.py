@@ -222,7 +222,7 @@ def detect(image: Image.Image, filename: str) -> dict:
 
         # Tiebreaker: Gemini on the fence + no EXIF camera data → nudge up (likely AI)
         if 0.42 <= g <= 0.58 and meta_score >= 0.38:
-            base_score += 0.06
+            base_score += 0.04
 
         final = round(max(0.0, min(1.0, base_score)), 3)
 
