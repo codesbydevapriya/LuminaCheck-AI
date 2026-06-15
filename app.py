@@ -106,10 +106,13 @@ def analyze_forensics(image: Image.Image) -> tuple:
 
 def analyze_filename(filename: str) -> tuple:
     name = filename.lower()
+    stem = os.path.splitext(name)[0]
     ai_patterns = ["dalle", "midjourney", "generated", "flux",
                    "stable", "diffusion", "sdxl", "firefly", "ideogram",
                    "runway", "leonardoai", "novelai"]
-    if any(x in name for x in ai_patterns):
+    # Match "ai" only as a standalone segment, not inside other words
+    ai_standalone = bool(re.search(r'(?<![a-z])ai(?![a-z])', stem))
+    if any(x in stem for x in ai_patterns) or ai_standalone:
         return 0.78, "AI keyword in filename"
     camera_patterns = ["img_", "dsc", "dcim", "p_20", "photo_", "snap", "cam"]
     if any(x in name for x in camera_patterns):
@@ -123,15 +126,13 @@ def resize_for_gemini(image: Image.Image, max_px: int = 768) -> Image.Image:
     ratio = max_px / max(w, h)
     return image.resize((int(w * ratio), int(h * ratio)), Image.LANCZOS)
 
-def get_openrouter_summary(score: float, meta_note: str, forensic_note: str, fname_note: str) -> str:
-    """Generate a human-readable summary using OpenRouter (text only, no image needed)."""
+def get_openrouter_summary(score: float, meta_note: str, forensic_note: str, fname_note: str, gemini_reason: str = "") -> str:
     import urllib.request, urllib.error
 
     OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
     if not OPENROUTER_API_KEY:
         return "OpenRouter API key not set."
 
-    # Rotate through free models if one rate-limits
     MODELS = [
         "meta-llama/llama-3.2-3b-instruct:free",
         "mistralai/mistral-7b-instruct:free",
@@ -141,10 +142,13 @@ def get_openrouter_summary(score: float, meta_note: str, forensic_note: str, fna
     label = "AI Generated" if score >= 0.48 else "Likely Real"
     pct = round(score * 100)
 
+    gemini_line = f"- Gemini vision analysis: {gemini_reason}" if gemini_reason else ""
+
     prompt = f"""You are a forensic image analysis assistant.
 Based on these signal scores, write a 2-3 sentence summary explaining why this image was classified as '{label}' with {pct}% AI probability.
 
 Signals detected:
+{gemini_line}
 - EXIF metadata: {meta_note}
 - Pixel forensics: {forensic_note}
 - Filename pattern: {fname_note}
@@ -176,37 +180,87 @@ Write only the summary. No preamble, no bullet points."""
                     return data["choices"][0]["message"]["content"].strip()
             except urllib.error.HTTPError as e:
                 if e.code == 429:
-                    time.sleep(3 * (attempt + 1))  # wait then retry
+                    time.sleep(3 * (attempt + 1))
                     continue
                 else:
-                    break  # try next model
+                    break
             except Exception:
-                break  # try next model
+                break
 
-    # All models failed — generate a basic rule-based summary
     if score >= 0.48:
-        return f"This image shows characteristics consistent with AI generation. Pixel forensics and signal analysis returned a {pct}% AI probability score. No camera metadata was detected to confirm authentic photography."
+        return f"This image shows characteristics consistent with AI generation. Signal analysis returned a {pct}% AI probability score. {gemini_reason}"
     else:
         return f"This image appears to be a real photograph based on signal analysis ({pct}% AI probability). Forensic indicators suggest authentic camera characteristics are present."
 
 
 def detect_with_gemini(image: Image.Image) -> tuple:
-    """Returns (score, reason). Score is always from local signals; reason from OpenRouter."""
-    return 0.5, "__use_openrouter__"
+    """Call Gemini vision to analyze if image is AI generated. Returns (score 0-1, reason)."""
+    try:
+        if not GEMINI_API_KEY:
+            return 0.5, "No Gemini API key set"
+
+        genai.configure(api_key=GEMINI_API_KEY)
+        model = genai.GenerativeModel("gemini-2.5-flash")
+
+        # Resize to save tokens
+        img = resize_for_gemini(image, max_px=768)
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=85)
+        img_bytes = buf.getvalue()
+
+        prompt = """You are a forensic image authentication expert.
+Carefully analyze this image and determine if it is AI generated or a real photograph.
+
+Look for these AI generation artifacts:
+- Unnatural skin texture (too smooth, waxy, plastic-like)
+- Strange background blurring or inconsistencies
+- Weird hands, fingers, or teeth
+- Text that looks garbled or incorrect
+- Lighting that doesn't match between subject and background
+- Eyes that look glassy or unnatural
+- Overly perfect symmetry
+
+Reply ONLY with a JSON object, no other text:
+{"ai_probability": 0.85, "reason": "brief explanation of key signals found"}
+
+ai_probability scale:
+0.0-0.2 = clearly real photograph
+0.2-0.4 = likely real
+0.4-0.6 = uncertain
+0.6-0.8 = likely AI generated
+0.8-1.0 = clearly AI generated"""
+
+        response = model.generate_content([
+            {"mime_type": "image/jpeg", "data": img_bytes},
+            prompt
+        ])
+
+        text = response.text.strip()
+        # Clean up response in case model adds markdown
+        text = text.replace("```json", "").replace("```", "").strip()
+        result = json.loads(text)
+        score = float(result.get("ai_probability", 0.5))
+        reason = result.get("reason", "Gemini analysis complete")
+        return round(max(0.0, min(1.0, score)), 3), reason
+
+    except Exception as e:
+        return 0.5, f"Gemini error: {str(e)[:60]}"
+
 
 def detect(image: Image.Image, filename: str) -> dict:
     try:
         meta_score, meta_note = analyze_metadata(image)
         forensic_score, forensic_note = analyze_forensics(image)
         fname_score, fname_note = analyze_filename(filename)
+        gemini_score, gemini_reason = detect_with_gemini(image)
 
-        # Score purely from local signals (no Gemini)
+        # Weighted fusion — Gemini gets highest weight now that it's active
         base_score = (
-            0.50 * forensic_score +
-            0.30 * meta_score +
-            0.20 * fname_score
+            0.50 * gemini_score +
+            0.25 * forensic_score +
+            0.15 * meta_score +
+            0.10 * fname_score
         )
-        g = base_score  # used in tiebreaker logic below
 
         # Strong metadata override: if EXIF confirms camera, pull score down
         if meta_score <= 0.12:
@@ -216,22 +270,20 @@ def detect(image: Image.Image, filename: str) -> dict:
         if meta_score >= 0.90:
             base_score = max(base_score, 0.75)
 
-        # Tiebreaker: Gemini on the fence (0.42–0.58) + filename signals AI → nudge up
-        if 0.42 <= g <= 0.58 and fname_score >= 0.70:
-            base_score += 0.08
-
-        # Tiebreaker: Gemini on the fence + no EXIF camera data → nudge up (likely AI)
-        if 0.42 <= g <= 0.58 and meta_score >= 0.38:
-            base_score += 0.04
+        # Tiebreaker: only ONE nudge at a time
+        if 0.42 <= base_score <= 0.58:
+            if fname_score >= 0.70:
+                base_score += 0.08
+            elif meta_score >= 0.38:
+                base_score += 0.04
 
         final = round(max(0.0, min(1.0, base_score)), 3)
 
-        # OpenRouter summary (text only)
-        summary = get_openrouter_summary(final, meta_note, forensic_note, fname_note)
+        summary = get_openrouter_summary(final, meta_note, forensic_note, fname_note, gemini_reason)
 
         return {
             "score": final,
-            "gemini_score": forensic_score,
+            "gemini_score": gemini_score,
             "meta_score": meta_score,
             "forensic_score": forensic_score,
             "fname_score": fname_score,
@@ -239,6 +291,7 @@ def detect(image: Image.Image, filename: str) -> dict:
             "meta_note": meta_note,
             "forensic_note": forensic_note,
             "fname_note": fname_note,
+            "gemini_note": gemini_reason,
             "spread": 0
         }
 
@@ -253,11 +306,12 @@ def detect(image: Image.Image, filename: str) -> dict:
             "meta_note": "",
             "forensic_note": "",
             "fname_note": "",
+            "gemini_note": "",
             "spread": 0
         }
 
 def classify(score: float) -> str:
-    if score >= 0.48:
+    if score >= 0.50:
         return "AI Generated"
     else:
         return "Likely Real"
@@ -344,6 +398,7 @@ if st.session_state.ui_phase == "results":
         "meta_note": result["meta_note"],
         "forensic_note": result["forensic_note"],
         "fname_note": result["fname_note"],
+        "gemini_note": result.get("gemini_note", ""),
         "spread": result["spread"],
         "filename": st.session_state.current_filename,
         "img_b64": img_b64,
@@ -792,7 +847,7 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
     if (data.reason) document.getElementById('reasonText').textContent = data.reason;
 
     document.getElementById('techNotes').innerHTML =
-      `meta: ${data.meta_note}<br>forensics: ${data.forensic_note}<br>filename: ${data.fname_note}<br>signal spread: ${data.spread}`;
+      `gemini: ${data.gemini_note}<br>meta: ${data.meta_note}<br>forensics: ${data.forensic_note}<br>filename: ${data.fname_note}<br>signal spread: ${data.spread}`;
 
     if (data.history && data.history.length > 0) {
       histDivider.style.display = 'block';
