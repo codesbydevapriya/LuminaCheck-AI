@@ -106,7 +106,7 @@ def analyze_forensics(image: Image.Image) -> tuple:
 
 def analyze_filename(filename: str) -> tuple:
     name = filename.lower()
-    ai_patterns = ["ai", "dalle", "midjourney", "generated", "flux",
+    ai_patterns = ["dalle", "midjourney", "generated", "flux",
                    "stable", "diffusion", "sdxl", "firefly", "ideogram",
                    "runway", "leonardoai", "novelai"]
     if any(x in name for x in ai_patterns):
